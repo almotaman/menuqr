@@ -4375,6 +4375,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         console.log('Target Subdomain:', targetSubdomain)
 
         const {
+          endpoint,
+          projectId,
           databaseId,
           restaurantsCollectionId,
           menuCollectionId,
@@ -4402,10 +4404,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           return
         }
         setRestaurantId(restaurantId)
-        const restaurantMenuImageUrl =
-          typeof restaurant.menu_image_url === 'string'
-            ? restaurant.menu_image_url.trim()
+        const menuFileId =
+          typeof restaurant.menu_img_url === 'string'
+            ? restaurant.menu_img_url.trim()
             : ''
+        const restaurantMenuImageUrl = menuFileId
+          ? `${endpoint.replace(/\/$/, '')}/storage/buckets/menu-assets/files/${menuFileId}/view?project=${projectId}`
+          : ''
         setMenuImageUrl(restaurantMenuImageUrl || null)
 
         const hotspotsRes = await databases.listDocuments(
@@ -4690,20 +4695,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           )}
           {menuImageUrl && (
             <section className="mb-8">
-              <div className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-xl border bg-white shadow-sm">
-                {menuImageUrl.toLowerCase().split('?')[0].endsWith('.pdf') ? (
-                  <iframe
-                    src={menuImageUrl}
-                    title={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
-                    className="h-[75vh] min-h-[520px] w-full"
-                  />
-                ) : (
-                  <img
-                    src={menuImageUrl}
-                    alt={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
-                    className="block h-auto w-full"
-                  />
-                )}
+              <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border bg-white shadow-sm">
+                <img
+                  src={menuImageUrl}
+                  alt={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
+                  className="block h-auto w-full"
+                />
                 <div className="absolute inset-0">
                   {hotspotItems.map(({ hotspot, item }) => (
                     <button
@@ -4718,6 +4715,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       style={{
                         top: `${hotspot.y}%`,
                         left: `${hotspot.x}%`,
+                        transform: 'translate(-50%, -50%)',
                       }}
                     >
                       +

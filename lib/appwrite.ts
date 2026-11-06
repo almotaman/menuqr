@@ -42,6 +42,8 @@ export function getAppwriteConfig() {
   }
 
   return {
+    endpoint,
+    projectId,
     databaseId,
     restaurantsCollectionId: resolvedRestaurantsCollectionId,
     menuCollectionId: resolvedMenuCollectionId,
