@@ -14,6 +14,7 @@ type OrderItem = {
 type OrderDocument = {
   $id: string
   $createdAt?: string
+  restaurant_id?: string | null
   table_number?: string | number | null
   notes?: string | null
   items?: string | OrderItem[] | null
@@ -41,6 +42,8 @@ function orderTotal(order: OrderDocument) {
 
 export default function CashierPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  const [restaurantId, setRestaurantId] = useState<string | null>(null)
+  const [workspaceStatus, setWorkspaceStatus] = useState<'checking' | 'valid' | 'invalid'>('checking')
   const [orders, setOrders] = useState<OrderDocument[]>([])
   const [printOrder, setPrintOrder] = useState<OrderDocument | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -71,7 +74,11 @@ export default function CashierPage() {
   }, [])
 
   useEffect(() => {
-    if (!authorized) return
+    if (!authorized) {
+      setWorkspaceStatus('checking')
+      setRestaurantId(null)
+      return
+    }
 
     let unsubscribe: (() => void) | undefined
     let cancelled = false
@@ -79,17 +86,53 @@ export default function CashierPage() {
     const loadOrders = async () => {
       setIsLoading(true)
       setError(null)
+      setWorkspaceStatus('checking')
+      setRestaurantId(null)
 
       try {
-        const { databaseId, ordersCollectionId } = getAppwriteConfig()
+        const {
+          databaseId,
+          restaurantsCollectionId,
+          ordersCollectionId,
+        } = getAppwriteConfig()
+        const hostname = window.location.hostname
+        const targetSubdomain = hostname.includes('vercel.app') ||
+          hostname.includes('localhost')
+          ? 'burgerhouse'
+          : hostname.split('.')[0]
+        const restaurantResponse = await databases.listDocuments(
+          databaseId,
+          restaurantsCollectionId,
+          [Query.equal('subdomain', targetSubdomain)]
+        )
+        const restaurant = restaurantResponse.documents[0] as { $id?: string } | undefined
+        const currentRestaurantId = restaurant?.$id
+
+        if (!currentRestaurantId) {
+          if (!cancelled) setWorkspaceStatus('invalid')
+          return
+        }
+
+        if (!cancelled) {
+          setRestaurantId(currentRestaurantId)
+          setWorkspaceStatus('valid')
+        }
+
         const response = await databases.listDocuments(
           databaseId,
           ordersCollectionId,
-          [Query.equal('status', ['pending'])]
+          [
+            Query.equal('restaurant_id', currentRestaurantId),
+            Query.equal('status', 'pending'),
+          ]
         )
 
         if (!cancelled) {
-          setOrders(response.documents as unknown as OrderDocument[])
+          setOrders(
+            (response.documents as unknown as OrderDocument[]).filter(
+              order => order.restaurant_id === currentRestaurantId
+            )
+          )
         }
 
         unsubscribe = client.subscribe(
@@ -97,7 +140,12 @@ export default function CashierPage() {
           realtimeEvent => {
             const order = realtimeEvent.payload as unknown as OrderDocument
             const isCreated = realtimeEvent.events.some(event => event.endsWith('.create'))
-            if (!isCreated || !order.$id || order.status !== 'pending') return
+            if (
+              !isCreated ||
+              !order.$id ||
+              order.restaurant_id !== currentRestaurantId ||
+              order.status !== 'pending'
+            ) return
 
             setOrders(current => [
               order,
@@ -110,6 +158,7 @@ export default function CashierPage() {
         )
       } catch (loadError) {
         if (!cancelled) {
+          setWorkspaceStatus('invalid')
           setError(loadError instanceof Error ? loadError.message : 'Unable to load orders.')
         }
       } finally {
@@ -134,6 +183,19 @@ export default function CashierPage() {
         <LockKeyhole className="h-12 w-12 text-amber-400" />
         <h1 className="text-2xl font-semibold">Unauthorized Access</h1>
         <p className="text-slate-400">Please complete on-site terminal setup.</p>
+      </main>
+    )
+  }
+
+  if (workspaceStatus === 'checking') {
+    return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">Resolving restaurant workspace...</main>
+  }
+
+  if (workspaceStatus === 'invalid' || !restaurantId) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 px-6 text-center text-slate-100">
+        <h1 className="text-2xl font-semibold">Invalid Restaurant Workspace</h1>
+        <p className="text-slate-400">This cashier terminal is not linked to a valid restaurant.</p>
       </main>
     )
   }
