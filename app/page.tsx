@@ -4246,6 +4246,20 @@ type AppwriteDocument = Record<string, any> & {
   $updatedAt?: string;
 }
 
+const MENU_IMAGE_PLACEHOLDER =
+  'https://placehold.co/1200x1600?text=Menu+Image'
+
+function getMenuImageUrl(imageSource?: string) {
+  const source = imageSource?.trim()
+  if (!source) return MENU_IMAGE_PLACEHOLDER
+  if (/^https?:\/\//i.test(source)) return source
+
+  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT
+  return projectId
+    ? `https://cloud.appwrite.io/v1/storage/buckets/menu-assets/files/${encodeURIComponent(source)}/view?project=${projectId}`
+    : MENU_IMAGE_PLACEHOLDER
+}
+
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
     ? { ...document.menu, id: document.menu.id || document.$id }
@@ -4375,8 +4389,6 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         console.log('Target Subdomain:', targetSubdomain)
 
         const {
-          endpoint,
-          projectId,
           databaseId,
           restaurantsCollectionId,
           menuCollectionId,
@@ -4408,10 +4420,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           typeof restaurant.menu_img_url === 'string'
             ? restaurant.menu_img_url.trim()
             : ''
-        const restaurantMenuImageUrl = menuFileId
-          ? `${endpoint.replace(/\/$/, '')}/storage/buckets/menu-assets/files/${menuFileId}/view?project=${projectId}`
-          : ''
-        setMenuImageUrl(restaurantMenuImageUrl || null)
+        setMenuImageUrl(menuFileId || null)
 
         const hotspotsRes = await databases.listDocuments(
           databaseId,
@@ -4697,7 +4706,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             <section className="mb-8">
               <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border bg-white shadow-sm">
                 <img
-                  src={menuImageUrl}
+                  src={getMenuImageUrl(menuImageUrl || '')}
                   alt={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
                   className="block h-auto w-full"
                 />
