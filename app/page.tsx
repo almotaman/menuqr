@@ -4409,9 +4409,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         }
         setRestaurantId(restaurantId)
         const rawImageValue =
-          typeof restaurant.menu_img_url === 'string' && restaurant.menu_img_url.trim()
-            ? restaurant.menu_img_url
-            : typeof restaurant.menu_image_id === 'string'
+          typeof restaurant.menu_image_url === 'string' && restaurant.menu_image_url.trim()
+            ? restaurant.menu_image_url
+            : typeof restaurant.menu_img_url === 'string' && restaurant.menu_img_url.trim()
+              ? restaurant.menu_img_url
+              : typeof restaurant.menu_image_id === 'string' && restaurant.menu_image_id.trim()
               ? restaurant.menu_image_id
               : ''
         setMenuImageSource(rawImageValue.trim() || null)
