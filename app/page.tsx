@@ -4403,7 +4403,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           return
         }
 
+        console.log('RESTURANT DATA FROM DB:', restaurant)
         console.log('Matched Restaurant:', restaurant)
+        console.log('menu_image_url field:', restaurant?.menu_image_url)
         const restaurantId = restaurant.$id
 
         if (!restaurantId) {
@@ -4412,12 +4414,15 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         }
         setRestaurantId(restaurantId)
         const rawImageValue =
-          typeof restaurant.menu_image_url === 'string' && restaurant.menu_image_url.trim()
-            ? restaurant.menu_image_url
-            : typeof restaurant.menu_img_url === 'string' && restaurant.menu_img_url.trim()
-              ? restaurant.menu_img_url
-              : ''
-        setMenuImageSource(rawImageValue.trim() || null)
+          restaurant?.menu_image_url ||
+          restaurant?.menu_img_url ||
+          ''
+        console.log('rawImageValue extracted:', rawImageValue)
+        setMenuImageSource(
+          typeof rawImageValue === 'string' && rawImageValue.trim()
+            ? rawImageValue.trim()
+            : null
+        )
 
         const hotspotsRes = await databases.listDocuments(
           databaseId,
@@ -4592,6 +4597,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const menuImageUrl = menuImageSource && !menuImageSource.startsWith('http')
     ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(menuImageSource)}/view?project=${PROJECT_ID}`
     : menuImageSource || MENU_IMAGE_PLACEHOLDER
+  console.log('Final computed menuImageUrl:', menuImageUrl)
 
   const hotspotItems = menuHotspots
     .map(hotspot => ({
