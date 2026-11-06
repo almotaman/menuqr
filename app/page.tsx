@@ -4185,7 +4185,7 @@ interface MenuItem {
   id: string;
   name: string;
   category?: string;
-  description: string;
+  description?: string;
   price: string;
   image_url?: string;
   ingredients?: string[];
@@ -4292,7 +4292,10 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
               category.name ||
               'Other'
             ),
-            description: item.description || '',
+            description:
+              typeof item.description === 'string'
+                ? item.description.trim() || undefined
+                : undefined,
             price: String(item.price ?? ''),
             image_url: item.image_url || undefined,
             ingredients: Array.isArray(item.ingredients) ? item.ingredients : undefined,
@@ -4662,7 +4665,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       <h3 className="text-lg font-semibold">{item.name}</h3>
                       <span className="shrink-0 text-lg font-medium">{item.price}</span>
                     </div>
-                    <p className="line-clamp-2 text-gray-600">{item.description}</p>
+                    {item.description && (
+                      <p className="line-clamp-2 text-sm text-gray-400">
+                        {item.description}
+                      </p>
+                    )}
                     {(() => {
                       const quantity = cart.find(entry => entry.item.id === item.id)?.quantity || 0
                       if (item.is_available === false) {
