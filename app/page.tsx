@@ -4727,98 +4727,102 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               </div>
             </section>
           )}
-          <div className="mb-8 flex gap-2 overflow-x-auto border-b pb-3">
-            {categories.map(category => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setSelectedCategory(category)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  selectedCategory === category
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {visibleItems.map((item, index) => (
-              <Card 
-                key={item.id || index}
-                className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
-              >
-                {item.image_url ? (
-                  <div className="h-48 w-full">
-                    <img
-                      src={item.image_url}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex h-48 w-full items-center justify-center bg-gray-100">
-                    <span className="text-sm text-gray-400">No image</span>
+          {!menuImageUrl && (
+            <>
+              <div className="mb-8 flex gap-2 overflow-x-auto border-b pb-3">
+                {categories.map(category => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setSelectedCategory(category)}
+                    className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                      selectedCategory === category
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleItems.map((item, index) => (
+                  <Card
+                    key={item.id || index}
+                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                  >
+                    {item.image_url ? (
+                      <div className="h-48 w-full">
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-48 w-full items-center justify-center bg-gray-100">
+                        <span className="text-sm text-gray-400">No image</span>
+                      </div>
+                    )}
+                    <CardContent className="p-4">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-lg font-semibold">{item.name}</h3>
+                          <span className="shrink-0 text-lg font-medium">{item.price}</span>
+                        </div>
+                        {item.description && (
+                          <p className="line-clamp-2 text-sm text-gray-400">
+                            {item.description}
+                          </p>
+                        )}
+                        {(() => {
+                          const quantity = cart.find(entry => entry.item.id === item.id)?.quantity || 0
+                          if (item.is_available === false) {
+                            return <Button type="button" className="w-full" disabled>Unavailable</Button>
+                          }
+                          if (quantity === 0) {
+                            return (
+                              <Button type="button" className="w-full" onClick={() => addToCart(item)}>
+                                Add
+                              </Button>
+                            )
+                          }
+                          return (
+                            <div className="flex items-center justify-between rounded-md border p-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Decrease ${item.name} quantity`}
+                                onClick={() => updateCartQuantity(item.id, -1)}
+                              >
+                                {quantity === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                              </Button>
+                              <span className="font-semibold">{quantity}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Increase ${item.name} quantity`}
+                                onClick={() => addToCart(item)}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {visibleItems.length === 0 && (
+                  <div className="col-span-full text-center text-gray-500">
+                    No items available in this category
                   </div>
                 )}
-                <CardContent className="p-4">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="text-lg font-semibold">{item.name}</h3>
-                      <span className="shrink-0 text-lg font-medium">{item.price}</span>
-                    </div>
-                    {item.description && (
-                      <p className="line-clamp-2 text-sm text-gray-400">
-                        {item.description}
-                      </p>
-                    )}
-                    {(() => {
-                      const quantity = cart.find(entry => entry.item.id === item.id)?.quantity || 0
-                      if (item.is_available === false) {
-                        return <Button type="button" className="w-full" disabled>Unavailable</Button>
-                      }
-                      if (quantity === 0) {
-                        return (
-                          <Button type="button" className="w-full" onClick={() => addToCart(item)}>
-                            Add
-                          </Button>
-                        )
-                      }
-                      return (
-                        <div className="flex items-center justify-between rounded-md border p-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Decrease ${item.name} quantity`}
-                            onClick={() => updateCartQuantity(item.id, -1)}
-                          >
-                            {quantity === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
-                          </Button>
-                          <span className="font-semibold">{quantity}</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Increase ${item.name} quantity`}
-                            onClick={() => addToCart(item)}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )
-                    })()}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            {visibleItems.length === 0 && (
-              <div className="col-span-full text-center text-gray-500">
-                No items available in this category
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         <Dialog
