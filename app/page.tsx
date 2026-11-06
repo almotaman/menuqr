@@ -4252,16 +4252,6 @@ const ENDPOINT = 'https://cloud.appwrite.io/v1'
 const BUCKET_ID = 'menu-assets'
 const PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT || ''
 
-function getMenuSource(rawId?: string) {
-  const source = rawId?.trim()
-  if (!source) return MENU_IMAGE_PLACEHOLDER
-  return /^https?:\/\//i.test(source)
-    ? source
-    : PROJECT_ID
-      ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(source)}/view?project=${PROJECT_ID}`
-      : MENU_IMAGE_PLACEHOLDER
-}
-
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
     ? { ...document.menu, id: document.menu.id || document.$id }
@@ -4355,7 +4345,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [orderNotes, setOrderNotes] = useState('')
-  const [menuImageUrl, setMenuImageUrl] = useState<string | null>(null)
+  const [menuImageSource, setMenuImageSource] = useState<string | null>(null)
   const [menuHotspots, setMenuHotspots] = useState<MenuHotspot[]>([])
   const [selectedHotspotItem, setSelectedHotspotItem] = useState<MenuItem | null>(null)
   const [hotspotQuantity, setHotspotQuantity] = useState(1)
@@ -4418,13 +4408,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           return
         }
         setRestaurantId(restaurantId)
-        const rawMenuImageId =
+        const rawImageValue =
           typeof restaurant.menu_img_url === 'string' && restaurant.menu_img_url.trim()
             ? restaurant.menu_img_url
             : typeof restaurant.menu_image_id === 'string'
               ? restaurant.menu_image_id
               : ''
-        setMenuImageUrl(getMenuSource(rawMenuImageId))
+        setMenuImageSource(rawImageValue.trim() || null)
 
         const hotspotsRes = await databases.listDocuments(
           databaseId,
@@ -4596,6 +4586,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const visibleItems = selectedCategory === 'All'
     ? menuItems
     : menuItems.filter(item => (item.category || 'Other') === selectedCategory)
+  const menuImageUrl = menuImageSource && !menuImageSource.startsWith('http')
+    ? PROJECT_ID
+      ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(menuImageSource)}/view?project=${PROJECT_ID}`
+      : MENU_IMAGE_PLACEHOLDER
+    : menuImageSource || MENU_IMAGE_PLACEHOLDER
 
   const hotspotItems = menuHotspots
     .map(hotspot => ({
@@ -4706,7 +4701,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               {tableNumber} (Dine-In)
             </div>
           )}
-          {menuImageUrl && (
+          {menuImageSource && (
             <section className="mb-8">
               <div className="relative mx-auto w-full max-w-2xl">
                 <img
@@ -4743,7 +4738,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               </div>
             </section>
           )}
-          {!menuImageUrl && (
+          {!menuImageSource && (
             <>
               <div className="mb-8 flex gap-2 overflow-x-auto border-b pb-3">
                 {categories.map(category => (
