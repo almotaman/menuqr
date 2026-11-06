@@ -4709,12 +4709,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             </div>
           )}
           {menuImageSource && (
-            <section className="mb-8">
-              <div className="relative mx-auto w-full max-w-2xl">
+            <section className="mb-8 w-full max-w-5xl mx-auto px-2 sm:px-4">
+              <div className="relative w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
                 <img
                   src={menuImageUrl}
                   alt="Paper Menu"
-                  className="block h-auto w-full rounded-lg shadow-lg"
+                  className="block h-auto w-full object-contain"
                   onError={event => {
                     if (event.currentTarget.src !== MENU_IMAGE_PLACEHOLDER) {
                       event.currentTarget.src = MENU_IMAGE_PLACEHOLDER
@@ -4731,7 +4731,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                         event.stopPropagation()
                         openHotspotItem(item)
                       }}
-                      className="absolute z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black text-base font-bold text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
+                      className="absolute z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-black/90 text-base font-bold text-white shadow-xl transition-transform hover:scale-110 active:scale-95 sm:h-10 sm:w-10 sm:text-lg"
                       style={{
                         top: `${hotspot.y}%`,
                         left: `${hotspot.x}%`,
