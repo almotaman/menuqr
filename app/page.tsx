@@ -4200,6 +4200,16 @@ interface MenuItem {
 interface CartItem {
   item: MenuItem;
   quantity: number;
+  notes?: string;
+}
+
+interface MenuHotspot {
+  $id: string;
+  item_id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 interface Category {
@@ -4329,6 +4339,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [orderNotes, setOrderNotes] = useState('')
+  const [menuImageUrl, setMenuImageUrl] = useState<string | null>(null)
+  const [menuHotspots, setMenuHotspots] = useState<MenuHotspot[]>([])
+  const [selectedHotspotItem, setSelectedHotspotItem] = useState<MenuItem | null>(null)
+  const [hotspotQuantity, setHotspotQuantity] = useState(1)
+  const [hotspotNotes, setHotspotNotes] = useState('')
   const [isTermsOpen, setIsTermsOpen] = useState(false)
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('All')
@@ -4363,6 +4378,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           databaseId,
           restaurantsCollectionId,
           menuCollectionId,
+          menuHotspotsCollectionId,
           ordersCollectionId,
         } = getAppwriteConfig()
         const restaurantRes = await databases.listDocuments(
@@ -4385,6 +4401,31 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           return
         }
         setRestaurantId(restaurantId)
+        const restaurantMenuImageUrl =
+          typeof restaurant.menu_image_url === 'string'
+            ? restaurant.menu_image_url.trim()
+            : ''
+        setMenuImageUrl(restaurantMenuImageUrl || null)
+
+        if (menuHotspotsCollectionId) {
+          const hotspotsRes = await databases.listDocuments(
+            databaseId,
+            menuHotspotsCollectionId,
+            [Query.equal('restaurant_id', restaurantId)]
+          )
+          setMenuHotspots(
+            hotspotsRes.documents.map(document => ({
+              $id: String(document.$id),
+              item_id: String(document.item_id),
+              x: Number(document.x || 0),
+              y: Number(document.y || 0),
+              width: Number(document.width || 0),
+              height: Number(document.height || 0),
+            }))
+          )
+        } else {
+          setMenuHotspots([])
+        }
 
         const menuRes = await databases.listDocuments(
           databaseId,
@@ -4426,17 +4467,23 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     fetchMenuData()
   }, [restaurantSubdomain, menuName])
 
-  const addToCart = (item: MenuItem) => {
+  const addToCart = (item: MenuItem, quantity = 1, notes = '') => {
     setCart(currentCart => {
       const existing = currentCart.find(entry => entry.item.id === item.id)
       if (existing) {
         return currentCart.map(entry =>
           entry.item.id === item.id
-            ? { ...entry, quantity: entry.quantity + 1 }
+            ? {
+                ...entry,
+                quantity: entry.quantity + quantity,
+                notes: notes.trim()
+                  ? [entry.notes, notes.trim()].filter(Boolean).join('; ')
+                  : entry.notes,
+              }
             : entry
         )
       }
-      return [...currentCart, { item, quantity: 1 }]
+      return [...currentCart, { item, quantity, notes: notes.trim() || undefined }]
     })
   }
 
@@ -4490,6 +4537,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         name: entry.item.name,
         quantity: entry.quantity,
         price: Number.parseFloat(entry.item.price) || 0,
+        notes: entry.notes || '',
       }))
       await databases.createDocument(
         databaseId,
@@ -4533,6 +4581,25 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const visibleItems = selectedCategory === 'All'
     ? menuItems
     : menuItems.filter(item => (item.category || 'Other') === selectedCategory)
+
+  const hotspotItems = menuHotspots
+    .map(hotspot => ({
+      hotspot,
+      item: menuItems.find(item => item.id === hotspot.item_id),
+    }))
+    .filter((entry): entry is { hotspot: MenuHotspot; item: MenuItem } => Boolean(entry.item))
+
+  const openHotspotItem = (item: MenuItem) => {
+    setSelectedHotspotItem(item)
+    setHotspotQuantity(1)
+    setHotspotNotes('')
+  }
+
+  const addHotspotItemToCart = () => {
+    if (!selectedHotspotItem) return
+    addToCart(selectedHotspotItem, hotspotQuantity, hotspotNotes)
+    setSelectedHotspotItem(null)
+  }
 
   if (loading) {
     return (
@@ -4623,6 +4690,42 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             <div className="mb-6 inline-flex rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
               {tableNumber} (Dine-In)
             </div>
+          )}
+          {menuImageUrl && (
+            <section className="mb-8">
+              <div className="relative mx-auto w-full max-w-4xl overflow-hidden rounded-xl border bg-white shadow-sm">
+                {menuImageUrl.toLowerCase().split('?')[0].endsWith('.pdf') ? (
+                  <iframe
+                    src={menuImageUrl}
+                    title={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
+                    className="h-[75vh] min-h-[520px] w-full"
+                  />
+                ) : (
+                  <img
+                    src={menuImageUrl}
+                    alt={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
+                    className="block h-auto w-full"
+                  />
+                )}
+                <div className="absolute inset-0">
+                  {hotspotItems.map(({ hotspot, item }) => (
+                    <button
+                      key={hotspot.$id}
+                      type="button"
+                      aria-label={`View ${item.name}`}
+                      onClick={() => openHotspotItem(item)}
+                      className="absolute cursor-pointer bg-transparent transition-colors hover:bg-black/10 active:bg-black/20"
+                      style={{
+                        top: `${hotspot.y}%`,
+                        left: `${hotspot.x}%`,
+                        width: `${hotspot.width}%`,
+                        height: `${hotspot.height}%`,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
           )}
           <div className="mb-8 flex gap-2 overflow-x-auto border-b pb-3">
             {categories.map(category => (
@@ -4716,8 +4819,69 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               </div>
             )}
           </div>
-
         </div>
+
+        <Dialog
+          open={Boolean(selectedHotspotItem)}
+          onOpenChange={open => {
+            if (!open) setSelectedHotspotItem(null)
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{selectedHotspotItem?.name}</DialogTitle>
+              {selectedHotspotItem?.description && (
+                <DialogDescription className="text-left">
+                  {selectedHotspotItem.description}
+                </DialogDescription>
+              )}
+            </DialogHeader>
+            {selectedHotspotItem && (
+              <div className="space-y-4">
+                <p className="text-xl font-semibold">{selectedHotspotItem.price}</p>
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setHotspotQuantity(quantity => Math.max(1, quantity - 1))}
+                    aria-label="Decrease quantity"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="font-semibold">{hotspotQuantity}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setHotspotQuantity(quantity => quantity + 1)}
+                    aria-label="Increase quantity"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hotspot-notes">Special Instructions / Notes (Optional)</Label>
+                  <Textarea
+                    id="hotspot-notes"
+                    value={hotspotNotes}
+                    onChange={event => setHotspotNotes(event.target.value)}
+                    placeholder="e.g. No onions, extra sauce"
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  className="w-full"
+                  disabled={selectedHotspotItem.is_available === false}
+                  onClick={addHotspotItemToCart}
+                >
+                  Add to Cart
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {cart.length > 0 && (
           <div className="sticky bottom-4 z-20 mx-auto flex w-full max-w-3xl items-center justify-between gap-4 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-xl">

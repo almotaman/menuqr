@@ -10,6 +10,8 @@ const menuCollectionId =
   process.env.NEXT_PUBLIC_APPWRITE_MENU_COLLECTION_ID;
 const ordersCollectionId =
   process.env.NEXT_PUBLIC_APPWRITE_ORDERS_COLLECTION_ID;
+const menuHotspotsCollectionId =
+  process.env.NEXT_PUBLIC_APPWRITE_MENU_HOTSPOTS_COLLECTION_ID;
 
 const client = new Client();
 if (endpoint && projectId) {
@@ -44,6 +46,7 @@ export function getAppwriteConfig() {
     restaurantsCollectionId: resolvedRestaurantsCollectionId,
     menuCollectionId: resolvedMenuCollectionId,
     ordersCollectionId: resolvedOrdersCollectionId,
+    menuHotspotsCollectionId,
   };
 }
 
