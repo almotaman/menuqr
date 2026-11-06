@@ -4381,6 +4381,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           menuHotspotsCollectionId,
           ordersCollectionId,
         } = getAppwriteConfig()
+        const hotspotsCollectionId = menuHotspotsCollectionId || 'menu_hotspots'
         const restaurantRes = await databases.listDocuments(
           databaseId,
           restaurantsCollectionId,
@@ -4407,25 +4408,21 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             : ''
         setMenuImageUrl(restaurantMenuImageUrl || null)
 
-        if (menuHotspotsCollectionId) {
-          const hotspotsRes = await databases.listDocuments(
-            databaseId,
-            menuHotspotsCollectionId,
-            [Query.equal('restaurant_id', restaurantId)]
-          )
-          setMenuHotspots(
-            hotspotsRes.documents.map(document => ({
-              $id: String(document.$id),
-              item_id: String(document.item_id),
-              x: Number(document.x || 0),
-              y: Number(document.y || 0),
-              width: Number(document.width || 0),
-              height: Number(document.height || 0),
-            }))
-          )
-        } else {
-          setMenuHotspots([])
-        }
+        const hotspotsRes = await databases.listDocuments(
+          databaseId,
+          hotspotsCollectionId,
+          [Query.equal('restaurant_id', restaurantId)]
+        )
+        setMenuHotspots(
+          hotspotsRes.documents.map(document => ({
+            $id: String(document.$id),
+            item_id: String(document.item_id),
+            x: Number(document.x || 0),
+            y: Number(document.y || 0),
+            width: Number(document.width || 0),
+            height: Number(document.height || 0),
+          }))
+        )
 
         const menuRes = await databases.listDocuments(
           databaseId,
@@ -4714,8 +4711,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       type="button"
                       aria-label={`View ${item.name}`}
                       onClick={() => openHotspotItem(item)}
-                      className="absolute cursor-pointer border-2 border-red-500 bg-red-500/20 transition-colors hover:bg-red-500/30 active:bg-red-500/40"
+                      className="cursor-pointer border-2 border-red-500 bg-red-500/30 transition-colors hover:bg-red-500/50"
                       style={{
+                        position: 'absolute',
                         top: `${hotspot.y}%`,
                         left: `${hotspot.x}%`,
                         width: `${hotspot.width}%`,
