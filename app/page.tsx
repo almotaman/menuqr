@@ -4247,7 +4247,7 @@ type AppwriteDocument = Record<string, any> & {
 }
 
 const MENU_IMAGE_PLACEHOLDER =
-  'https://placehold.co/1200x1600?text=Menu+Image'
+  'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
 
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
@@ -4696,8 +4696,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               <div className="relative mx-auto w-full max-w-2xl">
                 <img
                   src={menuImageUrl || MENU_IMAGE_PLACEHOLDER}
-                  alt={menuData?.restaurantName || 'Paper Menu'}
+                  alt="Paper Menu"
                   className="block h-auto w-full rounded-lg shadow-lg"
+                  onError={event => {
+                    if (event.currentTarget.src !== MENU_IMAGE_PLACEHOLDER) {
+                      event.currentTarget.src = MENU_IMAGE_PLACEHOLDER
+                    }
+                  }}
                 />
                 <div className="absolute inset-0">
                   {hotspotItems.map(({ hotspot, item }) => (
