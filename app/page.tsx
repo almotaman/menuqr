@@ -4693,11 +4693,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           )}
           {menuImageUrl && (
             <section className="mb-8">
-              <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="relative mx-auto w-full max-w-2xl">
                 <img
                   src={menuImageUrl || MENU_IMAGE_PLACEHOLDER}
-                  alt="Paper Menu"
-                  className="h-auto w-full rounded-lg shadow-lg"
+                  alt={menuData?.restaurantName || 'Paper Menu'}
+                  className="block h-auto w-full rounded-lg shadow-lg"
                 />
                 <div className="absolute inset-0">
                   {hotspotItems.map(({ hotspot, item }) => (
