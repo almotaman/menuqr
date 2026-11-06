@@ -4714,7 +4714,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       type="button"
                       aria-label={`View ${item.name}`}
                       onClick={() => openHotspotItem(item)}
-                      className="absolute cursor-pointer bg-transparent transition-colors hover:bg-black/10 active:bg-black/20"
+                      className="absolute cursor-pointer border-2 border-red-500 bg-red-500/20 transition-colors hover:bg-red-500/30 active:bg-red-500/40"
                       style={{
                         top: `${hotspot.y}%`,
                         left: `${hotspot.x}%`,
