@@ -4699,22 +4699,24 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
   return (
     <AnimatedPage>
-      <div className="flex flex-col min-h-screen">
-        <div className="container mx-auto px-4 py-4 sm:py-8 flex-grow">
-          <h1 className="text-3xl font-bold mb-1 sm:mb-2 capitalize">{menuData?.restaurantName}</h1>
-          <h2 className="text-xl text-gray-600 mb-3 sm:mb-6 capitalize">{menuData?.menuName}</h2>
+      <div className="flex min-h-screen flex-col bg-white">
+        <div className="container mx-auto flex-grow px-0 py-0 sm:px-4 sm:py-8">
+          <div className="px-4 py-4 sm:px-0 sm:py-0">
+            <h1 className="text-3xl font-bold mb-1 sm:mb-2 capitalize">{menuData?.restaurantName}</h1>
+            <h2 className="text-xl text-gray-600 mb-3 sm:mb-6 capitalize">{menuData?.menuName}</h2>
+          </div>
           {hasTableContext && (
-            <div className="mb-6 inline-flex rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
+            <div className="mx-4 mb-6 inline-flex rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-800 sm:mx-0">
               {tableNumber} (Dine-In)
             </div>
           )}
           {menuImageSource && (
-            <section className="mb-8 w-full max-w-full mx-auto px-0 sm:max-w-5xl sm:px-4">
-              <div className="relative w-full overflow-hidden rounded-none border-0 bg-white shadow-none sm:rounded-2xl sm:border sm:border-gray-100 sm:shadow-2xl">
+            <section className="mb-8 w-full px-0 sm:mx-auto sm:my-6 sm:max-w-5xl sm:px-0">
+              <div className="relative w-full overflow-hidden rounded-none bg-black sm:rounded-2xl">
                 <img
                   src={menuImageUrl}
                   alt="Paper Menu"
-                  className="block h-auto w-full object-contain"
+                  className="block h-auto w-full object-cover [touch-action:pinch-zoom]"
                   onError={event => {
                     if (event.currentTarget.src !== MENU_IMAGE_PLACEHOLDER) {
                       event.currentTarget.src = MENU_IMAGE_PLACEHOLDER
