@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Query } from 'appwrite'
-import { CheckCircle2, Clock3, Loader2, LockKeyhole, Printer, RefreshCw } from 'lucide-react'
+import { Clock3, Loader2, LockKeyhole, RefreshCw } from 'lucide-react'
 import { databases, client, getAppwriteConfig } from '@/lib/appwrite'
 
 type OrderItem = {
@@ -123,22 +123,6 @@ export default function CashierPage() {
     }
   }, [authorized])
 
-  const updateOrderStatus = async (order: OrderDocument, status: 'processing' | 'completed') => {
-    try {
-      const { databaseId, ordersCollectionId } = getAppwriteConfig()
-      await databases.updateDocument(databaseId, ordersCollectionId, order.$id, { status })
-      setOrders(current =>
-        status === 'completed'
-          ? current.filter(existing => existing.$id !== order.$id)
-          : current.map(existing =>
-              existing.$id === order.$id ? { ...existing, status } : existing
-            )
-      )
-    } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Unable to update order.')
-    }
-  }
-
   if (authorized === null) {
     return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">Checking terminal access...</main>
   }
@@ -210,16 +194,6 @@ export default function CashierPage() {
                       {order.$createdAt ? new Date(order.$createdAt).toLocaleTimeString() : 'Just now'}
                     </span>
                   </div>
-                  <div className="no-print mt-5 flex gap-2">
-                    {order.status === 'pending' && (
-                      <button type="button" className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold hover:bg-blue-500" onClick={() => updateOrderStatus(order, 'processing')}>
-                        Processing
-                      </button>
-                    )}
-                    <button type="button" className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500" onClick={() => updateOrderStatus(order, 'completed')}>
-                      <CheckCircle2 className="mr-1 inline h-4 w-4" /> Completed
-                    </button>
-                  </div>
                 </article>
               ))}
             </div>
@@ -228,28 +202,45 @@ export default function CashierPage() {
       </main>
 
       {printOrder && (
-        <section className="thermal-receipt">
-          <h1>Kitchen Order</h1>
-          <p>Table: {printOrder.table_number || 'N/A'}</p>
-          <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
-          <hr />
-          {parseOrderItems(printOrder.items).map((item, index) => (
-            <div key={`${printOrder.$id}-print-${index}`} className="receipt-line">
-              <span>{item.quantity}x {item.name}</span>
-              <span>${(Number(item.price) * item.quantity).toFixed(2)}</span>
-            </div>
-          ))}
-          <hr />
-          <div className="receipt-line"><strong>Total</strong><strong>${orderTotal(printOrder)}</strong></div>
+        <section className="thermal-receipts">
+          <div className="thermal-receipt receipt-kitchen">
+            <h1>--- KITCHEN TICKET ---</h1>
+            <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
+            <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
+            <hr />
+            {parseOrderItems(printOrder.items).map((item, index) => (
+              <div key={`${printOrder.$id}-kitchen-${index}`} className="receipt-line receipt-item">
+                <strong>{item.quantity}x {item.name}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="thermal-receipt receipt-customer">
+            <h1>--- CUSTOMER CHECK ---</h1>
+            <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
+            <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
+            <hr />
+            {parseOrderItems(printOrder.items).map((item, index) => (
+              <div key={`${printOrder.$id}-customer-${index}`} className="receipt-line">
+                <span>{item.quantity}x {item.name}</span>
+                <span>${(Number(item.price) * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+            <hr />
+            <div className="receipt-line"><strong>Subtotal</strong><strong>${orderTotal(printOrder)}</strong></div>
+            <div className="receipt-line receipt-total"><strong>Grand Total</strong><strong>${orderTotal(printOrder)}</strong></div>
+            <p className="receipt-footer">Thank you for dining with us!</p>
+          </div>
         </section>
       )}
 
       <style jsx global>{`
-        .thermal-receipt { display: none; }
+        .thermal-receipts { display: none; }
         @media print {
           @page { size: 80mm auto; margin: 0; }
           html, body { width: 80mm; margin: 0; padding: 0; background: #fff !important; }
           .cashier-dashboard { display: none !important; }
+          .no-print { display: none !important; }
+          .thermal-receipts { display: block !important; width: 80mm; }
           .thermal-receipt {
             display: block !important;
             width: 72mm;
@@ -258,10 +249,18 @@ export default function CashierPage() {
             background: #fff;
             font: 12px/1.35 monospace;
           }
-          .thermal-receipt h1 { margin: 0 0 3mm; text-align: center; font-size: 16px; }
+          .receipt-kitchen {
+            page-break-after: always;
+            break-after: page;
+          }
+          .thermal-receipt h1 { margin: 0 0 4mm; text-align: center; font-size: 16px; font-weight: 900; }
           .thermal-receipt p { margin: 1mm 0; text-align: center; }
+          .thermal-receipt .receipt-table { font-size: 20px; font-weight: 900; }
           .thermal-receipt hr { border: 0; border-top: 1px dashed #000; margin: 3mm 0; }
           .receipt-line { display: flex; justify-content: space-between; gap: 3mm; margin: 1.5mm 0; }
+          .receipt-item { justify-content: flex-start; font-size: 15px; }
+          .receipt-total { margin-top: 3mm; font-size: 15px; }
+          .receipt-footer { margin-top: 8mm !important; font-weight: 700; }
         }
       `}</style>
     </>
