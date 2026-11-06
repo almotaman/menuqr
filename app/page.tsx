@@ -4858,9 +4858,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             if (!open) setSelectedHotspotItem(null)
           }}
         >
-          <DialogContent className="fixed bottom-0 left-0 top-auto z-[100] max-h-[60vh] w-full max-w-full translate-x-0 translate-y-0 gap-2 rounded-t-2xl p-4 shadow-2xl sm:left-[50%] sm:top-[50%] sm:bottom-auto sm:w-[90%] sm:max-w-xs sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl">
-            <DialogHeader className="mb-2 flex items-start justify-between space-y-0 text-left">
-              <DialogTitle className="pr-4 text-sm font-bold text-gray-900">{selectedHotspotItem?.name}</DialogTitle>
+          <DialogContent className="fixed left-[50%] top-[50%] z-[999] my-auto flex w-[85%] max-w-sm translate-x-[-50%] translate-y-[-50%] flex-col gap-2 rounded-2xl bg-white p-5 shadow-2xl">
+            <DialogHeader className="mb-3 flex items-center justify-between space-y-0 text-left">
+              <DialogTitle className="pr-4 text-base font-bold text-gray-900">{selectedHotspotItem?.name}</DialogTitle>
               {selectedHotspotItem?.description && (
                 <DialogDescription className="mt-1 text-left text-xs">
                   {selectedHotspotItem.description}
@@ -4868,43 +4868,45 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               )}
             </DialogHeader>
             {selectedHotspotItem && (
-              <div className="space-y-2 overflow-y-auto text-xs">
-                <p className="text-xs font-semibold text-gray-700">{selectedHotspotItem.price}</p>
-                <div className="my-2 flex items-center justify-between rounded-lg border p-1 text-xs">
+              <div className="text-xs">
+                <div className="mb-3 text-sm font-semibold text-gray-700">
+                  {selectedHotspotItem.price} EGP
+                </div>
+                <div className="mb-3 flex items-center justify-between rounded-xl border border-gray-200 p-1.5">
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-8 w-8 rounded-lg p-0 text-sm"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 p-0 text-sm font-bold"
                     onClick={() => setHotspotQuantity(quantity => Math.max(1, quantity - 1))}
                     aria-label="Decrease quantity"
                   >
                     <Minus className="h-4 w-4" />
                   </Button>
-                  <span className="font-semibold">{hotspotQuantity}</span>
+                  <span className="text-sm font-bold">{hotspotQuantity}</span>
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-8 w-8 rounded-lg p-0 text-sm"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 p-0 text-sm font-bold"
                     onClick={() => setHotspotQuantity(quantity => quantity + 1)}
                     aria-label="Increase quantity"
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="space-y-1">
+                <div className="mb-3">
                   <Label className="text-xs" htmlFor="hotspot-notes">Special Instructions / Notes (Optional)</Label>
                   <Textarea
                     id="hotspot-notes"
                     value={hotspotNotes}
                     onChange={event => setHotspotNotes(event.target.value)}
-                    placeholder="e.g. No onions, extra sauce"
+                    placeholder="Special Instructions / Notes"
                     rows={2}
-                    className="mb-2 w-full resize-none rounded-lg border p-2 text-xs"
+                    className="mb-3 w-full resize-none rounded-xl border border-gray-200 p-2.5 text-xs"
                   />
                 </div>
                 <Button
                   type="button"
-                  className="w-full rounded-lg bg-black py-2 text-xs font-bold text-white"
+                  className="w-full rounded-xl bg-black py-2.5 text-xs font-bold text-white transition-colors hover:bg-gray-800"
                   disabled={selectedHotspotItem.is_available === false}
                   onClick={addHotspotItemToCart}
                 >
