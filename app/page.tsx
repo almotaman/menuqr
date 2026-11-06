@@ -4325,6 +4325,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
+  const [orderNotes, setOrderNotes] = useState('')
   const [isTermsOpen, setIsTermsOpen] = useState(false)
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('All')
@@ -4495,12 +4496,14 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           restaurant_id: restaurantId,
           table_number: hasTableContext ? tableNumber : '',
           items: JSON.stringify(items),
+          notes: orderNotes.trim(),
           total_price: cartTotal,
           status: 'pending',
         }
       )
 
       setCart([])
+      setOrderNotes('')
       setIsOrderOpen(false)
       setOrderConfirmation(
         `Order Sent to Kitchen! Your order for ${tableNumber} has been placed.`
@@ -4775,6 +4778,17 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="order-notes">Special Instructions / Notes (Optional)</Label>
+                <textarea
+                  id="order-notes"
+                  value={orderNotes}
+                  onChange={event => setOrderNotes(event.target.value)}
+                  placeholder="e.g. No onions, extra sauce"
+                  rows={3}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                />
               </div>
               <div className="flex items-center justify-between border-t pt-4 font-semibold">
                 <span>Total</span>

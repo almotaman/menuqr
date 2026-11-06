@@ -15,6 +15,7 @@ type OrderDocument = {
   $id: string
   $createdAt?: string
   table_number?: string | number | null
+  notes?: string | null
   items?: string | OrderItem[] | null
   total_price?: number | string | null
   status?: string | null
@@ -187,6 +188,11 @@ export default function CashierPage() {
                       </div>
                     ))}
                   </div>
+                  {order.notes?.trim() && (
+                    <div className="mt-4 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm text-amber-100">
+                      <strong>Note:</strong> {order.notes}
+                    </div>
+                  )}
                   <div className="mt-4 flex items-center justify-between">
                     <span className="text-lg font-bold">Total ${orderTotal(order)}</span>
                     <span className="flex items-center gap-1 text-xs text-slate-500">
@@ -207,6 +213,7 @@ export default function CashierPage() {
             <h1>--- KITCHEN TICKET ---</h1>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
+            {printOrder.notes?.trim() && <p className="receipt-note">NOTE: {printOrder.notes}</p>}
             <hr />
             {parseOrderItems(printOrder.items).map((item, index) => (
               <div key={`${printOrder.$id}-kitchen-${index}`} className="receipt-line receipt-item">
@@ -218,6 +225,7 @@ export default function CashierPage() {
             <h1>--- CUSTOMER CHECK ---</h1>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
+            {printOrder.notes?.trim() && <p className="receipt-note">NOTE: {printOrder.notes}</p>}
             <hr />
             {parseOrderItems(printOrder.items).map((item, index) => (
               <div key={`${printOrder.$id}-customer-${index}`} className="receipt-line">
@@ -256,6 +264,13 @@ export default function CashierPage() {
           .thermal-receipt h1 { margin: 0 0 4mm; text-align: center; font-size: 16px; font-weight: 900; }
           .thermal-receipt p { margin: 1mm 0; text-align: center; }
           .thermal-receipt .receipt-table { font-size: 20px; font-weight: 900; }
+          .thermal-receipt .receipt-note {
+            margin: 3mm 0 !important;
+            border: 1px solid #000;
+            padding: 2mm;
+            text-align: left;
+            font-weight: 900;
+          }
           .thermal-receipt hr { border: 0; border-top: 1px dashed #000; margin: 3mm 0; }
           .receipt-line { display: flex; justify-content: space-between; gap: 3mm; margin: 1.5mm 0; }
           .receipt-item { justify-content: flex-start; font-size: 15px; }
