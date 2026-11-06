@@ -4249,17 +4249,6 @@ type AppwriteDocument = Record<string, any> & {
 const MENU_IMAGE_PLACEHOLDER =
   'https://placehold.co/1200x1600?text=Menu+Image'
 
-function getMenuImageUrl(imageSource?: string) {
-  const source = imageSource?.trim()
-  if (!source) return MENU_IMAGE_PLACEHOLDER
-  if (/^https?:\/\//i.test(source)) return source
-
-  const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT
-  return projectId
-    ? `https://cloud.appwrite.io/v1/storage/buckets/menu-assets/files/${encodeURIComponent(source)}/view?project=${projectId}`
-    : MENU_IMAGE_PLACEHOLDER
-}
-
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
     ? { ...document.menu, id: document.menu.id || document.$id }
@@ -4416,11 +4405,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           return
         }
         setRestaurantId(restaurantId)
-        const menuFileId =
+        const restaurantMenuImageUrl =
           typeof restaurant.menu_img_url === 'string'
             ? restaurant.menu_img_url.trim()
             : ''
-        setMenuImageUrl(menuFileId || null)
+        setMenuImageUrl(restaurantMenuImageUrl || MENU_IMAGE_PLACEHOLDER)
 
         const hotspotsRes = await databases.listDocuments(
           databaseId,
@@ -4706,9 +4695,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             <section className="mb-8">
               <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border bg-white shadow-sm">
                 <img
-                  src={getMenuImageUrl(menuImageUrl || '')}
-                  alt={`${menuData?.restaurantName || 'Restaurant'} paper menu`}
-                  className="block h-auto w-full"
+                  src={menuImageUrl || MENU_IMAGE_PLACEHOLDER}
+                  alt="Paper Menu"
+                  className="h-auto w-full rounded-lg shadow-lg"
                 />
                 <div className="absolute inset-0">
                   {hotspotItems.map(({ hotspot, item }) => (
