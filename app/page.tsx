@@ -4700,17 +4700,17 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   return (
     <AnimatedPage>
       <div className="flex flex-col min-h-screen">
-        <div className="container mx-auto px-4 py-8 flex-grow">
-          <h1 className="text-3xl font-bold mb-2 capitalize">{menuData?.restaurantName}</h1>
-          <h2 className="text-xl text-gray-600 mb-6 capitalize">{menuData?.menuName}</h2>
+        <div className="container mx-auto px-4 py-4 sm:py-8 flex-grow">
+          <h1 className="text-3xl font-bold mb-1 sm:mb-2 capitalize">{menuData?.restaurantName}</h1>
+          <h2 className="text-xl text-gray-600 mb-3 sm:mb-6 capitalize">{menuData?.menuName}</h2>
           {hasTableContext && (
             <div className="mb-6 inline-flex rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-800">
               {tableNumber} (Dine-In)
             </div>
           )}
           {menuImageSource && (
-            <section className="mb-8 w-full max-w-5xl mx-auto px-2 sm:px-4">
-              <div className="relative w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
+            <section className="mb-8 w-full max-w-full mx-auto px-0 sm:max-w-5xl sm:px-4">
+              <div className="relative w-full overflow-hidden rounded-none border-0 bg-white shadow-none sm:rounded-2xl sm:border sm:border-gray-100 sm:shadow-2xl">
                 <img
                   src={menuImageUrl}
                   alt="Paper Menu"
@@ -4856,23 +4856,23 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             if (!open) setSelectedHotspotItem(null)
           }}
         >
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="mx-auto w-[90%] max-w-xs rounded-2xl p-4 shadow-xl sm:max-w-md sm:p-6">
             <DialogHeader>
-              <DialogTitle>{selectedHotspotItem?.name}</DialogTitle>
+              <DialogTitle className="pr-6 text-lg font-bold">{selectedHotspotItem?.name}</DialogTitle>
               {selectedHotspotItem?.description && (
-                <DialogDescription className="text-left">
+                <DialogDescription className="text-left text-sm">
                   {selectedHotspotItem.description}
                 </DialogDescription>
               )}
             </DialogHeader>
             {selectedHotspotItem && (
-              <div className="space-y-4">
-                <p className="text-xl font-semibold">{selectedHotspotItem.price}</p>
-                <div className="flex items-center justify-between rounded-md border p-2">
+              <div className="space-y-3">
+                <p className="mt-1 text-base font-semibold text-gray-700">{selectedHotspotItem.price}</p>
+                <div className="my-3 flex items-center justify-between rounded-xl border p-1.5">
                   <Button
                     type="button"
                     variant="outline"
-                    size="icon"
+                    className="h-8 w-8 p-0 text-sm"
                     onClick={() => setHotspotQuantity(quantity => Math.max(1, quantity - 1))}
                     aria-label="Decrease quantity"
                   >
@@ -4882,7 +4882,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   <Button
                     type="button"
                     variant="outline"
-                    size="icon"
+                    className="h-8 w-8 p-0 text-sm"
                     onClick={() => setHotspotQuantity(quantity => quantity + 1)}
                     aria-label="Increase quantity"
                   >
@@ -4896,12 +4896,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                     value={hotspotNotes}
                     onChange={event => setHotspotNotes(event.target.value)}
                     placeholder="e.g. No onions, extra sauce"
-                    rows={3}
+                    rows={2}
+                    className="resize-none p-2 text-sm"
                   />
                 </div>
                 <Button
                   type="button"
-                  className="w-full"
+                  className="mt-3 w-full rounded-xl py-2.5 text-sm font-medium"
                   disabled={selectedHotspotItem.is_available === false}
                   onClick={addHotspotItemToCart}
                 >
