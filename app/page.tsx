@@ -4248,6 +4248,19 @@ type AppwriteDocument = Record<string, any> & {
 
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
+const ENDPOINT = 'https://cloud.appwrite.io/v1'
+const BUCKET_ID = 'menu-assets'
+const PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT || ''
+
+function getMenuSource(rawId?: string) {
+  const source = rawId?.trim()
+  if (!source) return MENU_IMAGE_PLACEHOLDER
+  return /^https?:\/\//i.test(source)
+    ? source
+    : PROJECT_ID
+      ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(source)}/view?project=${PROJECT_ID}`
+      : MENU_IMAGE_PLACEHOLDER
+}
 
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
@@ -4405,11 +4418,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           return
         }
         setRestaurantId(restaurantId)
-        const restaurantMenuImageUrl =
-          typeof restaurant.menu_img_url === 'string'
-            ? restaurant.menu_img_url.trim()
-            : ''
-        setMenuImageUrl(restaurantMenuImageUrl || MENU_IMAGE_PLACEHOLDER)
+        const rawMenuImageId =
+          typeof restaurant.menu_img_url === 'string' && restaurant.menu_img_url.trim()
+            ? restaurant.menu_img_url
+            : typeof restaurant.menu_image_id === 'string'
+              ? restaurant.menu_image_id
+              : ''
+        setMenuImageUrl(getMenuSource(rawMenuImageId))
 
         const hotspotsRes = await databases.listDocuments(
           databaseId,
