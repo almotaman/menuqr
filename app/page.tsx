@@ -4381,7 +4381,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           menuHotspotsCollectionId,
           ordersCollectionId,
         } = getAppwriteConfig()
-        const hotspotsCollectionId = menuHotspotsCollectionId || 'menu_hotspots'
+        const hotspotsCollectionId = '6aede69d003a04dd1d1c'
         const restaurantRes = await databases.listDocuments(
           databaseId,
           restaurantsCollectionId,
