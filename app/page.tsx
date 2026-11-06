@@ -4722,25 +4722,32 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   }}
                 />
                 <div className="absolute inset-0">
-                  {hotspotItems.map(({ hotspot, item }) => (
-                    <button
-                      key={hotspot.$id}
-                      type="button"
-                      aria-label={`View ${item.name}`}
-                      onClick={event => {
-                        event.stopPropagation()
-                        openHotspotItem(item)
-                      }}
-                      className="absolute z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-black/90 text-base font-bold text-white shadow-xl transition-transform hover:scale-110 active:scale-95 sm:h-10 sm:w-10 sm:text-lg"
-                      style={{
-                        top: `${hotspot.y}%`,
-                        left: `${hotspot.x}%`,
-                        transform: 'translate(-50%, -50%)',
-                      }}
-                    >
-                      +
-                    </button>
-                  ))}
+                  {hotspotItems.map(({ hotspot, item }) => {
+                    const customWidth = hotspot.width > 0 ? `${hotspot.width}px` : '2rem'
+                    const customHeight = hotspot.height > 0 ? `${hotspot.height}px` : '2rem'
+
+                    return (
+                      <button
+                        key={hotspot.$id}
+                        type="button"
+                        aria-label={`View ${item.name}`}
+                        onClick={event => {
+                          event.stopPropagation()
+                          openHotspotItem(item)
+                        }}
+                        className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-black/90 text-base font-bold text-white shadow-xl transition-transform hover:scale-110 active:scale-95 sm:text-lg"
+                        style={{
+                          top: `${hotspot.y}%`,
+                          left: `${hotspot.x}%`,
+                          width: customWidth,
+                          height: customHeight,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                      >
+                        +
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </section>
