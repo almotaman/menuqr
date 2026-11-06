@@ -4248,9 +4248,12 @@ type AppwriteDocument = Record<string, any> & {
 
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
-const ENDPOINT = 'https://cloud.appwrite.io/v1'
-const BUCKET_ID = 'menu-assets'
-const PROJECT_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECT || ''
+const ENDPOINT =
+  process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1'
+const BUCKET_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'menu-assets'
+const PROJECT_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_PROJECT || '6aeb93c500286a5e5af2'
 
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
@@ -4413,8 +4416,6 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             ? restaurant.menu_image_url
             : typeof restaurant.menu_img_url === 'string' && restaurant.menu_img_url.trim()
               ? restaurant.menu_img_url
-              : typeof restaurant.menu_image_id === 'string' && restaurant.menu_image_id.trim()
-              ? restaurant.menu_image_id
               : ''
         setMenuImageSource(rawImageValue.trim() || null)
 
@@ -4589,9 +4590,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     ? menuItems
     : menuItems.filter(item => (item.category || 'Other') === selectedCategory)
   const menuImageUrl = menuImageSource && !menuImageSource.startsWith('http')
-    ? PROJECT_ID
-      ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(menuImageSource)}/view?project=${PROJECT_ID}`
-      : MENU_IMAGE_PLACEHOLDER
+    ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(menuImageSource)}/view?project=${PROJECT_ID}`
     : menuImageSource || MENU_IMAGE_PLACEHOLDER
 
   const hotspotItems = menuHotspots
@@ -4707,7 +4706,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             <section className="mb-8">
               <div className="relative mx-auto w-full max-w-2xl">
                 <img
-                  src={menuImageUrl || MENU_IMAGE_PLACEHOLDER}
+                  src={menuImageUrl}
                   alt="Paper Menu"
                   className="block h-auto w-full rounded-lg shadow-lg"
                   onError={event => {
