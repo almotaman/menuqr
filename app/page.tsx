@@ -4858,9 +4858,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             if (!open) setSelectedHotspotItem(null)
           }}
         >
-          <DialogContent className="fixed left-[50%] top-[50%] z-[999] my-auto flex w-[85%] max-w-sm translate-x-[-50%] translate-y-[-50%] flex-col gap-2 rounded-2xl bg-white p-5 shadow-2xl">
+          <DialogContent className="fixed left-[50%] top-[50%] z-[9999] my-auto flex w-[320px] max-w-[90vw] translate-x-[-50%] translate-y-[-50%] flex-col gap-2 rounded-2xl bg-white p-5 text-left shadow-2xl [&>button]:right-3 [&>button]:top-3 [&>button]:flex [&>button]:h-7 [&>button]:w-7 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:text-gray-400 [&>button]:hover:text-gray-600">
             <DialogHeader className="mb-3 flex items-center justify-between space-y-0 text-left">
-              <DialogTitle className="pr-4 text-base font-bold text-gray-900">{selectedHotspotItem?.name}</DialogTitle>
+              <DialogTitle className="mb-1 pr-6 text-base font-bold text-gray-900">{selectedHotspotItem?.name}</DialogTitle>
               {selectedHotspotItem?.description && (
                 <DialogDescription className="mt-1 text-left text-xs">
                   {selectedHotspotItem.description}
@@ -4872,11 +4872,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 <div className="mb-3 text-sm font-semibold text-gray-700">
                   {selectedHotspotItem.price} EGP
                 </div>
-                <div className="mb-3 flex items-center justify-between rounded-xl border border-gray-200 p-1.5">
+                <div className="mb-3 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-1.5">
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 p-0 text-sm font-bold"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0 text-sm font-bold shadow-sm"
                     onClick={() => setHotspotQuantity(quantity => Math.max(1, quantity - 1))}
                     aria-label="Decrease quantity"
                   >
@@ -4886,7 +4886,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   <Button
                     type="button"
                     variant="outline"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 p-0 text-sm font-bold"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0 text-sm font-bold shadow-sm"
                     onClick={() => setHotspotQuantity(quantity => quantity + 1)}
                     aria-label="Increase quantity"
                   >
@@ -4901,12 +4901,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                     onChange={event => setHotspotNotes(event.target.value)}
                     placeholder="Special Instructions / Notes"
                     rows={2}
-                    className="mb-3 w-full resize-none rounded-xl border border-gray-200 p-2.5 text-xs"
+                    className="mb-4 w-full resize-none rounded-xl border border-gray-200 p-2.5 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-black"
                   />
                 </div>
                 <Button
                   type="button"
-                  className="w-full rounded-xl bg-black py-2.5 text-xs font-bold text-white transition-colors hover:bg-gray-800"
+                  className="w-full rounded-xl bg-black py-2.5 text-xs font-bold text-white shadow-md transition-colors hover:bg-gray-800"
                   disabled={selectedHotspotItem.is_available === false}
                   onClick={addHotspotItemToCart}
                 >
