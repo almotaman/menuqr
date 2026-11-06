@@ -4710,16 +4710,18 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       key={hotspot.$id}
                       type="button"
                       aria-label={`View ${item.name}`}
-                      onClick={() => openHotspotItem(item)}
-                      className="cursor-pointer border-2 border-red-500 bg-red-500/30 transition-colors hover:bg-red-500/50"
+                      onClick={event => {
+                        event.stopPropagation()
+                        openHotspotItem(item)
+                      }}
+                      className="absolute z-10 flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black text-base font-bold text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
                       style={{
-                        position: 'absolute',
                         top: `${hotspot.y}%`,
                         left: `${hotspot.x}%`,
-                        width: `${hotspot.width}%`,
-                        height: `${hotspot.height}%`,
                       }}
-                    />
+                    >
+                      +
+                    </button>
                   ))}
                 </div>
               </div>
