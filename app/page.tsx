@@ -4188,7 +4188,6 @@ interface MenuItem {
   category?: string;
   description?: string;
   price: string;
-  image_file_id?: string;
   image_url?: string;
   ingredients?: string[];
   allergens?: string[];
@@ -4324,7 +4323,6 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
                 ? item.description.trim() || undefined
                 : undefined,
             price: String(item.price ?? ''),
-            image_file_id: item.image_file_id || undefined,
             image_url: item.image_url || undefined,
             ingredients: Array.isArray(item.ingredients) ? item.ingredients : undefined,
             allergens: Array.isArray(item.allergens) ? item.allergens : undefined,
@@ -4856,8 +4854,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               </div>
               <div className="grid grid-cols-2 gap-3 px-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
                 {visibleItems.map((item, index) => {
-                  const rawImageFileId = item.image_file_id
-                  const imageSource = rawImageFileId || item.image_url
+                  const rawImageFileId = item.image_url
+                  const imageSource = item.image_url
                   const imageUrl = getDirectAppwriteUrl(BUCKET_ID, imageSource)
                   const imageFailed = Boolean(failedItemImages[item.id])
                   const hasUsableImage = Boolean(imageUrl) && !imageFailed
