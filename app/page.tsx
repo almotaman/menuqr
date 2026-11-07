@@ -20,7 +20,7 @@ import { ChevronDown, Menu, Plus, Minus, Trash2, Loader2, QrCode, Settings, User
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { databases, getAppwriteConfig } from '@/lib/appwrite'
+import { databases, getAppwriteConfig, getDirectAppwriteUrl } from '@/lib/appwrite'
 import { ID, Query } from 'appwrite'
 
 // Register Chart.js components
@@ -4259,12 +4259,8 @@ type AppwriteDocument = Record<string, any> & {
 
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
-const ENDPOINT =
-  process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1'
 const BUCKET_ID =
   process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'menu-assets'
-const PROJECT_ID =
-  process.env.NEXT_PUBLIC_APPWRITE_PROJECT || '6aeb93c500286a5e5af2'
 
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
@@ -4675,9 +4671,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const visibleItems = selectedCategory === 'All'
     ? menuItems
     : menuItems.filter(item => (item.category || 'Other') === selectedCategory)
-  const menuImageUrl = menuImageSource && !menuImageSource.startsWith('http')
-    ? `${ENDPOINT}/storage/buckets/${BUCKET_ID}/files/${encodeURIComponent(menuImageSource)}/view?project=${PROJECT_ID}`
-    : menuImageSource || MENU_IMAGE_PLACEHOLDER
+  const menuImageUrl =
+    getDirectAppwriteUrl(BUCKET_ID, menuImageSource || undefined) ||
+    MENU_IMAGE_PLACEHOLDER
   console.log('Final computed menuImageUrl:', menuImageUrl)
 
   const hotspotItems = menuHotspots
@@ -4732,9 +4728,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 >
                   <div className="relative h-48 w-full">
                     <img
-                      src={menu.image}
+                      src={getDirectAppwriteUrl(BUCKET_ID, menu.image) || MENU_IMAGE_PLACEHOLDER}
                       alt={menu.name}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                   </div>
                   <CardContent className="p-4">
@@ -4798,6 +4795,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   src={menuImageUrl}
                   alt="Paper Menu"
                   className="block h-auto w-full object-cover [touch-action:pinch-zoom]"
+                  loading="lazy"
                   onError={event => {
                     if (event.currentTarget.src !== MENU_IMAGE_PLACEHOLDER) {
                       event.currentTarget.src = MENU_IMAGE_PLACEHOLDER
@@ -4860,27 +4858,34 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                     className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
                   >
                     {item.image_url ? (
-                      <div className="h-24 w-full sm:h-36">
+                      <div className="flex items-start gap-2 p-2.5">
                         <img
-                          src={item.image_url}
+                          src={getDirectAppwriteUrl(BUCKET_ID, item.image_url) || MENU_IMAGE_PLACEHOLDER}
                           alt={item.name}
-                          className="h-full w-full object-cover"
+                          className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                          loading="lazy"
                         />
+                        <CardContent className="min-w-0 flex-1 p-0">
+                          <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
+                          {item.description && (
+                            <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500 sm:text-xs">
+                              {item.description}
+                            </p>
+                          )}
+                        </CardContent>
                       </div>
-                    ) : (
-                      <div className="flex h-24 w-full items-center justify-center bg-gray-100 sm:h-36">
-                        <span className="text-sm text-gray-400">No image</span>
-                      </div>
-                    )}
-                    <CardContent className="flex flex-1 flex-col justify-between p-2.5">
-                      <div>
+                    ) : null}
+                    <CardContent className={`flex flex-1 flex-col justify-between p-2.5 ${item.image_url ? 'pt-0' : ''}`}>
+                      {!item.image_url && (
+                        <div>
                         <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
                         {item.description && (
                           <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500 sm:text-xs">
                             {item.description}
                           </p>
                         )}
-                      </div>
+                        </div>
+                      )}
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-gray-800 sm:text-sm">{item.price}</span>
                         {(() => {
