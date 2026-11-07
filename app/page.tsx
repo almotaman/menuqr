@@ -4188,6 +4188,7 @@ interface MenuItem {
   category?: string;
   description?: string;
   price: string;
+  image_file_id?: string;
   image_url?: string;
   ingredients?: string[];
   allergens?: string[];
@@ -4323,6 +4324,7 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
                 ? item.description.trim() || undefined
                 : undefined,
             price: String(item.price ?? ''),
+            image_file_id: item.image_file_id || undefined,
             image_url: item.image_url || undefined,
             ingredients: Array.isArray(item.ingredients) ? item.ingredients : undefined,
             allergens: Array.isArray(item.allergens) ? item.allergens : undefined,
@@ -4365,6 +4367,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [isTermsOpen, setIsTermsOpen] = useState(false)
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const [failedItemImages, setFailedItemImages] = useState<Record<string, boolean>>({})
   const navigate = useNavigate()
   const queryTableNumber = new URLSearchParams(location.search).get('table')
   const rawTableNumber = pathTableNumber || queryTableNumber
@@ -4852,18 +4855,42 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-3 px-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
-                {visibleItems.map((item, index) => (
+                {visibleItems.map((item, index) => {
+                  const rawImageFileId = item.image_file_id
+                  const imageSource = rawImageFileId || item.image_url
+                  const imageUrl = getDirectAppwriteUrl(BUCKET_ID, imageSource)
+                  const imageFailed = Boolean(failedItemImages[item.id])
+                  const hasUsableImage = Boolean(imageUrl) && !imageFailed
+
+                  console.log('Menu dish image:', {
+                    dish: item.name,
+                    rawImageFileId,
+                    finalUrl: imageUrl,
+                  })
+
+                  return (
                   <Card
                     key={item.id || index}
                     className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
                   >
-                    {item.image_url ? (
+                    {hasUsableImage ? (
                       <div className="flex items-start gap-2 p-2.5">
                         <img
-                          src={getDirectAppwriteUrl(BUCKET_ID, item.image_url) || MENU_IMAGE_PLACEHOLDER}
+                          src={imageUrl || ''}
                           alt={item.name}
                           className="h-16 w-16 shrink-0 rounded-lg object-cover"
                           loading="lazy"
+                          onError={event => {
+                            console.error(
+                              'Image load error for dish:',
+                              item.name,
+                              event.currentTarget.src
+                            )
+                            setFailedItemImages(current => ({
+                              ...current,
+                              [item.id]: true,
+                            }))
+                          }}
                         />
                         <CardContent className="min-w-0 flex-1 p-0">
                           <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
@@ -4875,8 +4902,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                         </CardContent>
                       </div>
                     ) : null}
-                    <CardContent className={`flex flex-1 flex-col justify-between p-2.5 ${item.image_url ? 'pt-0' : ''}`}>
-                      {!item.image_url && (
+                    <CardContent className={`flex flex-1 flex-col justify-between p-2.5 ${hasUsableImage ? 'pt-0' : ''}`}>
+                      {!hasUsableImage && (
                         <div>
                         <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
                         {item.description && (
@@ -4937,7 +4964,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  )
+                })}
                 {visibleItems.length === 0 && (
                   <div className="col-span-full text-center text-gray-500">
                     No items available in this category
