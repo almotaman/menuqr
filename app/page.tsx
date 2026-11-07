@@ -4579,13 +4579,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         ordersCollectionId,
         ID.unique(),
         {
-          order_number: submittedOrder.order_number,
-          restaurant_id: submittedOrder.restaurant_id,
-          table_number: submittedOrder.table_number,
+          order_number: String(submittedOrder.order_number),
+          restaurant_id: String(submittedOrder.restaurant_id),
+          table_number: String(submittedOrder.table_number),
           items: JSON.stringify(submittedOrder.items),
-          total_price: submittedOrder.total_price,
-          status: submittedOrder.status,
-          notes: submittedOrder.notes,
+          total_price: String(submittedOrder.total_price),
+          status: 'Sent to Kitchen',
+          notes: String(submittedOrder.notes || ''),
         }
       )
 
