@@ -40,6 +40,12 @@ function orderTotal(order: OrderDocument) {
   return Number(order.total_price || 0).toFixed(2)
 }
 
+function isActiveOrderStatus(status: OrderDocument['status']) {
+  return status === 'pending' ||
+    status === 'processing' ||
+    status === 'Sent to Kitchen'
+}
+
 export default function CashierPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
@@ -50,7 +56,7 @@ export default function CashierPage() {
   const [error, setError] = useState<string | null>(null)
 
   const activeOrders = useMemo(
-    () => orders.filter(order => order.status === 'pending' || order.status === 'processing'),
+    () => orders.filter(order => isActiveOrderStatus(order.status)),
     [orders]
   )
 
@@ -123,7 +129,8 @@ export default function CashierPage() {
           ordersCollectionId,
           [
             Query.equal('restaurant_id', currentRestaurantId),
-            Query.equal('status', 'pending'),
+            Query.equal('status', ['pending', 'processing', 'Sent to Kitchen']),
+            Query.orderDesc('$createdAt'),
           ]
         )
 
@@ -144,7 +151,7 @@ export default function CashierPage() {
               !isCreated ||
               !order.$id ||
               order.restaurant_id !== currentRestaurantId ||
-              order.status !== 'pending'
+              !isActiveOrderStatus(order.status)
             ) return
 
             setOrders(current => [
