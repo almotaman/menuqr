@@ -59,7 +59,7 @@ export const account = new Account(client);
 export function getDirectAppwriteUrl(bucketId: string, fileId?: string) {
   if (!fileId) return null;
   if (fileId.startsWith('http')) return fileId;
-  return storage.getFileView(bucketId, fileId);
+  return storage.getFilePreview(bucketId, fileId);
 }
 
 export { client };
