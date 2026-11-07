@@ -22,7 +22,29 @@ type OrderDocument = {
   status?: string | null
 }
 
-const CHIME_URL = 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg'
+function playSound() {
+  try {
+    const AudioContextConstructor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextConstructor) return
+
+    const context = new AudioContextConstructor()
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(880, context.currentTime)
+    gain.gain.setValueAtTime(0.3, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.00001, context.currentTime + 0.5)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.5)
+    void context.resume()
+  } catch (audioError) {
+    console.error('Audio play failed', audioError)
+  }
+}
 
 function parseOrderItems(items: OrderDocument['items']): OrderItem[] {
   if (Array.isArray(items)) return items
@@ -54,6 +76,7 @@ export default function CashierPage() {
   const [printOrder, setPrintOrder] = useState<OrderDocument | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [audioEnabled, setAudioEnabled] = useState(false)
 
   const activeOrders = useMemo(
     () => orders.filter(order => isActiveOrderStatus(order.status)),
@@ -159,7 +182,7 @@ export default function CashierPage() {
               ...current.filter(existing => existing.$id !== order.$id),
             ])
             setPrintOrder(order)
-            new Audio(CHIME_URL).play().catch(() => undefined)
+            playSound()
             window.setTimeout(() => window.print(), 150)
           }
         )
@@ -218,6 +241,16 @@ export default function CashierPage() {
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-400">
               <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-emerald-300">Live</span>
+              <button
+                type="button"
+                className="no-print rounded-lg border border-slate-700 px-3 py-2 hover:bg-slate-800"
+                onClick={() => {
+                  playSound()
+                  setAudioEnabled(true)
+                }}
+              >
+                {audioEnabled ? 'Audio Enabled' : 'Enable Audio Alerts'}
+              </button>
               <button
                 type="button"
                 className="no-print rounded-lg border border-slate-700 p-2 hover:bg-slate-800"
