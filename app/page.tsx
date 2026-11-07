@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { useState, useEffect } from 'react'
+import html2canvas from 'html2canvas'
 import { BrowserRouter } from 'react-router-dom'
 import { Route, Routes, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -4203,6 +4204,16 @@ interface CartItem {
   notes?: string;
 }
 
+interface CompletedOrder {
+  order_number: string;
+  restaurant_id: string;
+  table_number: string;
+  items: Array<{ name: string; quantity: number; price: number; notes?: string }>;
+  total_price: number;
+  status: string;
+  notes: string;
+}
+
 interface MenuHotspot {
   $id: string;
   item_id: string;
@@ -4346,6 +4357,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [orderError, setOrderError] = useState<string | null>(null)
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null)
+  const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [orderNotes, setOrderNotes] = useState('')
   const [menuImageSource, setMenuImageSource] = useState<string | null>(null)
@@ -4552,26 +4564,36 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         price: Number.parseFloat(entry.item.price) || 0,
         notes: entry.notes || '',
       }))
+      const orderNumber = `#${Math.floor(100 + Math.random() * 900)}`
+      const submittedOrder: CompletedOrder = {
+        order_number: orderNumber,
+        restaurant_id: restaurantId,
+        table_number: hasTableContext ? tableNumber : '',
+        items,
+        total_price: cartTotal,
+        status: 'Sent to Kitchen',
+        notes: orderNotes.trim(),
+      }
       await databases.createDocument(
         databaseId,
         ordersCollectionId,
         ID.unique(),
         {
-          restaurant_id: restaurantId,
-          table_number: hasTableContext ? tableNumber : '',
-          items: JSON.stringify(items),
-          notes: orderNotes.trim(),
-          total_price: cartTotal,
-          status: 'pending',
+          order_number: submittedOrder.order_number,
+          restaurant_id: submittedOrder.restaurant_id,
+          table_number: submittedOrder.table_number,
+          items: JSON.stringify(submittedOrder.items),
+          total_price: submittedOrder.total_price,
+          status: submittedOrder.status,
+          notes: submittedOrder.notes,
         }
       )
 
       setCart([])
       setOrderNotes('')
       setIsOrderOpen(false)
-      setOrderConfirmation(
-        `Order Sent to Kitchen! Your order for ${tableNumber} has been placed.`
-      )
+      setOrderConfirmation(`Order Sent to Kitchen! Your order for ${tableNumber} has been placed.`)
+      setCompletedOrder(submittedOrder)
     } catch (err) {
       console.error('Failed to submit dine-in order to Appwrite', err)
       setOrderError(
@@ -4581,6 +4603,22 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       )
     } finally {
       setIsSubmittingOrder(false)
+    }
+
+  }
+
+  const downloadReceipt = async () => {
+    const element = document.getElementById('receipt-card')
+    if (!element || !completedOrder) return
+
+    try {
+      const canvas = await html2canvas(element, { scale: 2 })
+      const link = document.createElement('a')
+      link.href = canvas.toDataURL('image/png')
+      link.download = `Receipt-${completedOrder.order_number.replace('#', '')}.png`
+      link.click()
+    } catch (err) {
+      console.error('Failed to download receipt', err)
     }
   }
 
@@ -5033,22 +5071,75 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           </DialogContent>
         </Dialog>
 
-        <Dialog
-          open={Boolean(orderConfirmation)}
-          onOpenChange={open => {
-            if (!open) setOrderConfirmation(null)
-          }}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Order confirmed</DialogTitle>
-              <DialogDescription>{orderConfirmation}</DialogDescription>
-            </DialogHeader>
-            <Button type="button" onClick={() => setOrderConfirmation(null)}>
-              Place Another Order
-            </Button>
-          </DialogContent>
-        </Dialog>
+        {completedOrder && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+            <div className="relative max-h-[90vh] w-[320px] max-w-[90vw] overflow-y-auto rounded-2xl bg-white p-5 text-center shadow-2xl">
+              <button
+                type="button"
+                aria-label="Close order confirmation"
+                className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:text-gray-600"
+                onClick={() => {
+                  setCompletedOrder(null)
+                  setOrderConfirmation(null)
+                }}
+              >
+                ×
+              </button>
+              <div className="mb-2 text-2xl text-green-600">✓</div>
+              <h3 className="text-lg font-bold text-gray-900">Order Placed Successfully</h3>
+              <div className="my-3 rounded-xl bg-gray-100 py-2 text-xl font-black text-black">
+                Order {completedOrder.order_number}
+              </div>
+              <p className="text-sm text-gray-600">
+                {completedOrder.table_number || 'No table specified'} · {completedOrder.status}
+              </p>
+              <div id="receipt-card" className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-left">
+                <div className="mb-3 flex items-center justify-between border-b pb-2">
+                  <span className="font-semibold">Receipt</span>
+                  <span className="text-sm text-gray-500">{completedOrder.order_number}</span>
+                </div>
+                <div className="space-y-2">
+                  {completedOrder.items.map((item, index) => (
+                    <div key={`${item.name}-${index}`} className="flex justify-between gap-3 text-sm">
+                      <span>
+                        {item.quantity} × {item.name}
+                        {item.notes && <span className="block text-xs text-gray-500">{item.notes}</span>}
+                      </span>
+                      <span className="shrink-0">
+                        {(item.price * item.quantity).toFixed(2)} EGP
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {completedOrder.notes && (
+                  <p className="mt-3 border-t pt-2 text-xs text-gray-600">
+                    Note: {completedOrder.notes}
+                  </p>
+                )}
+                <div className="mt-3 flex justify-between border-t pt-3 font-bold">
+                  <span>Total</span>
+                  <span>{completedOrder.total_price.toFixed(2)} EGP</span>
+                </div>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <Button type="button" className="flex-1 text-xs" onClick={downloadReceipt}>
+                  Download Receipt (.png)
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={() => {
+                    setCompletedOrder(null)
+                    setOrderConfirmation(null)
+                  }}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t">
           <p className="text-xs text-gray-500">© 2024 Menu QRs. All rights reserved.</p>
