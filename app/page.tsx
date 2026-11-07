@@ -4358,6 +4358,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false)
   const [orderConfirmation, setOrderConfirmation] = useState<string | null>(null)
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null)
+  const [receiptError, setReceiptError] = useState<string | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [orderNotes, setOrderNotes] = useState('')
   const [menuImageSource, setMenuImageSource] = useState<string | null>(null)
@@ -4628,13 +4629,39 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     if (!element || !completedOrder) return
 
     try {
+      setReceiptError(null)
       const canvas = await html2canvas(element, { scale: 2 })
+      const fileName = `Receipt-${completedOrder.order_number.replace('#', '')}.png`
+      const blob = await new Promise<Blob | null>(resolve => {
+        canvas.toBlob(resolve, 'image/png')
+      })
+      if (!blob) throw new Error('Unable to create the receipt image.')
+
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const shareData = {
+        files: [file],
+        title: `Receipt ${completedOrder.order_number}`,
+        text: 'Restaurant order receipt',
+      }
+
+      if (
+        typeof navigator.share === 'function' &&
+        typeof navigator.canShare === 'function' &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share(shareData)
+        return
+      }
+
       const link = document.createElement('a')
-      link.href = canvas.toDataURL('image/png')
-      link.download = `Receipt-${completedOrder.order_number.replace('#', '')}.png`
+      link.href = URL.createObjectURL(blob)
+      link.download = fileName
       link.click()
+      window.setTimeout(() => URL.revokeObjectURL(link.href), 1000)
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       console.error('Failed to download receipt', err)
+      setReceiptError('Could not share the receipt. Please try again.')
     }
   }
 
@@ -5137,9 +5164,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   <span>{completedOrder.total_price.toFixed(2)} EGP</span>
                 </div>
               </div>
+              {receiptError && <p className="mt-3 text-sm text-red-600">{receiptError}</p>}
               <div className="mt-4 flex gap-2">
                 <Button type="button" className="flex-1 text-xs" onClick={downloadReceipt}>
-                  Download Receipt (.png)
+                  Save Receipt to Photos
                 </Button>
                 <Button
                   type="button"
