@@ -4564,7 +4564,23 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         price: Number.parseFloat(entry.item.price) || 0,
         notes: entry.notes || '',
       }))
-      const orderNumber = `#${Math.floor(100 + Math.random() * 900)}`
+      const latestOrders = await databases.listDocuments(
+        databaseId,
+        ordersCollectionId,
+        [
+          Query.equal('restaurant_id', String(restaurantId)),
+          Query.orderDesc('$createdAt'),
+          Query.limit(1),
+        ]
+      )
+      const latestOrder = latestOrders.documents[0] as AppwriteDocument | undefined
+      const latestOrderNumber = Number.parseInt(
+        String(latestOrder?.order_number || latestOrder?.orderNumber || '').replace(/\D/g, ''),
+        10
+      )
+      const orderNumber = String(
+        Number.isFinite(latestOrderNumber) ? latestOrderNumber + 1 : 1
+      )
       const submittedOrder: CompletedOrder = {
         order_number: orderNumber,
         restaurant_id: restaurantId,
@@ -5088,7 +5104,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               <div className="mb-2 text-2xl text-green-600">✓</div>
               <h3 className="text-lg font-bold text-gray-900">Order Placed Successfully</h3>
               <div className="my-3 rounded-xl bg-gray-100 py-2 text-xl font-black text-black">
-                Order {completedOrder.order_number}
+                Order #{completedOrder.order_number}
               </div>
               <p className="text-sm text-gray-600">
                 {completedOrder.table_number || 'No table specified'} · {completedOrder.status}
