@@ -14,6 +14,7 @@ type OrderItem = {
 type OrderDocument = {
   $id: string
   $createdAt?: string
+  order_number?: string | number | null
   restaurant_id?: string | null
   table_number?: string | number | null
   notes?: string | null
@@ -310,9 +311,13 @@ export default function CashierPage() {
       </main>
 
       {printOrder && (
-        <section className="thermal-receipts">
+        <section id="thermal-receipt" className="thermal-receipts">
           <div className="thermal-receipt receipt-kitchen">
             <h1>--- KITCHEN TICKET ---</h1>
+            <div className="text-center my-2 pb-2 border-b border-dashed border-black">
+              <span className="text-sm font-bold uppercase tracking-wider block">Order Number</span>
+              <span className="text-2xl font-black block">{printOrder.order_number || '#---'}</span>
+            </div>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
             {printOrder.notes?.trim() && <p className="receipt-note">NOTE: {printOrder.notes}</p>}
@@ -325,6 +330,10 @@ export default function CashierPage() {
           </div>
           <div className="thermal-receipt receipt-customer">
             <h1>--- CUSTOMER CHECK ---</h1>
+            <div className="text-center my-2 pb-2 border-b border-dashed border-black">
+              <span className="text-sm font-bold uppercase tracking-wider block">Order Number</span>
+              <span className="text-2xl font-black block">{printOrder.order_number || '#---'}</span>
+            </div>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
             {printOrder.notes?.trim() && <p className="receipt-note">NOTE: {printOrder.notes}</p>}
