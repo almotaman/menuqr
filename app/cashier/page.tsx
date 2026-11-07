@@ -80,6 +80,16 @@ export default function CashierPage() {
   const [error, setError] = useState<string | null>(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
 
+  useEffect(() => {
+    if (!printOrder) return
+
+    const printTimer = window.setTimeout(() => {
+      window.print()
+    }, 100)
+
+    return () => window.clearTimeout(printTimer)
+  }, [printOrder])
+
   const activeOrders = useMemo(
     () => orders.filter(order => isActiveOrderStatus(order.status)),
     [orders]
@@ -196,7 +206,6 @@ export default function CashierPage() {
             ])
             setPrintOrder(completeOrder)
             playSound()
-            window.setTimeout(() => window.print(), 300)
           }
         )
       } catch (loadError) {
@@ -326,9 +335,9 @@ export default function CashierPage() {
         <section id="thermal-receipt" className="thermal-receipts">
           <div className="thermal-receipt receipt-kitchen">
             <h1>--- KITCHEN TICKET ---</h1>
-            <div className="my-1 text-center text-lg font-bold">
+            <p className="receipt-order-number">
               Order #{printOrder.order_number || printOrder.orderNumber || printOrder.$id?.slice(-4) || '---'}
-            </div>
+            </p>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
             {printOrder.notes?.trim() && <p className="receipt-note">NOTE: {printOrder.notes}</p>}
@@ -341,9 +350,9 @@ export default function CashierPage() {
           </div>
           <div className="thermal-receipt receipt-customer">
             <h1>--- CUSTOMER CHECK ---</h1>
-            <div className="my-1 text-center text-lg font-bold">
+            <p className="receipt-order-number">
               Order #{printOrder.order_number || printOrder.orderNumber || printOrder.$id?.slice(-4) || '---'}
-            </div>
+            </p>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
             {printOrder.notes?.trim() && <p className="receipt-note">NOTE: {printOrder.notes}</p>}
@@ -384,6 +393,15 @@ export default function CashierPage() {
           }
           .thermal-receipt h1 { margin: 0 0 4mm; text-align: center; font-size: 16px; font-weight: 900; }
           .thermal-receipt p { margin: 1mm 0; text-align: center; }
+          .thermal-receipt .receipt-order-number {
+            display: block !important;
+            visibility: visible !important;
+            margin: 1mm 0 2mm !important;
+            text-align: center;
+            font-size: 18px;
+            line-height: 1.2;
+            font-weight: 900;
+          }
           .thermal-receipt .receipt-table { font-size: 20px; font-weight: 900; }
           .thermal-receipt .receipt-note {
             margin: 3mm 0 !important;
