@@ -24,6 +24,15 @@ type OrderDocument = {
   status?: string | null
 }
 
+function getOrderNumber(order: OrderDocument) {
+  const value = order.order_number ?? order.orderNumber
+  if (value !== null && value !== undefined && String(value).trim()) {
+    return String(value).trim()
+  }
+
+  return order.$id ? `#${order.$id.slice(-4)}` : '#---'
+}
+
 function playSound() {
   try {
     const AudioContextConstructor =
@@ -336,7 +345,7 @@ export default function CashierPage() {
           <div className="thermal-receipt receipt-kitchen">
             <h1>--- KITCHEN TICKET ---</h1>
             <p className="receipt-order-number">
-              Order #{printOrder.order_number || printOrder.orderNumber || printOrder.$id?.slice(-4) || '---'}
+              {getOrderNumber(printOrder)}
             </p>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
@@ -351,7 +360,7 @@ export default function CashierPage() {
           <div className="thermal-receipt receipt-customer">
             <h1>--- CUSTOMER CHECK ---</h1>
             <p className="receipt-order-number">
-              Order #{printOrder.order_number || printOrder.orderNumber || printOrder.$id?.slice(-4) || '---'}
+              {getOrderNumber(printOrder)}
             </p>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
