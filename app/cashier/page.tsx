@@ -316,7 +316,7 @@ export default function CashierPage() {
           <div className="thermal-receipt receipt-kitchen">
             <h1>--- KITCHEN TICKET ---</h1>
             <div className="my-1 text-center text-lg font-bold">
-              Order #{printOrder.order_number || printOrder.orderNumber || '---'}
+              Order #{printOrder.order_number || printOrder.orderNumber || printOrder.$id?.slice(-4) || '---'}
             </div>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
@@ -331,7 +331,7 @@ export default function CashierPage() {
           <div className="thermal-receipt receipt-customer">
             <h1>--- CUSTOMER CHECK ---</h1>
             <div className="my-1 text-center text-lg font-bold">
-              Order #{printOrder.order_number || printOrder.orderNumber || '---'}
+              Order #{printOrder.order_number || printOrder.orderNumber || printOrder.$id?.slice(-4) || '---'}
             </div>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
