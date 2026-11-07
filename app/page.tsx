@@ -4259,8 +4259,16 @@ type AppwriteDocument = Record<string, any> & {
 
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
-const BUCKET_ID =
-  process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID || 'menu-assets'
+const DISHES_BUCKET_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_DISHES_BUCKET_ID ||
+  process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID ||
+  'menu-assets'
+
+if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_APPWRITE_DISHES_BUCKET_ID) {
+  console.warn(
+    'NEXT_PUBLIC_APPWRITE_DISHES_BUCKET_ID is undefined. Dish image URLs are using the generic bucket fallback.'
+  )
+}
 
 function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   const menu = document.menu && typeof document.menu === 'object'
@@ -4673,7 +4681,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     ? menuItems
     : menuItems.filter(item => (item.category || 'Other') === selectedCategory)
   const menuImageUrl =
-    getDirectAppwriteUrl(BUCKET_ID, menuImageSource || undefined) ||
+    getDirectAppwriteUrl(DISHES_BUCKET_ID, menuImageSource || undefined) ||
     MENU_IMAGE_PLACEHOLDER
   console.log('Final computed menuImageUrl:', menuImageUrl)
 
@@ -4729,7 +4737,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 >
                   <div className="relative h-48 w-full">
                     <img
-                      src={getDirectAppwriteUrl(BUCKET_ID, menu.image) || MENU_IMAGE_PLACEHOLDER}
+                      src={getDirectAppwriteUrl(DISHES_BUCKET_ID, menu.image) || MENU_IMAGE_PLACEHOLDER}
                       alt={menu.name}
                       className="w-full h-full object-cover"
                       loading="lazy"
@@ -4856,7 +4864,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 {visibleItems.map((item, index) => {
                   const rawImageFileId = item.image_url
                   const imageSource = item.image_url
-                  const imageUrl = getDirectAppwriteUrl(BUCKET_ID, imageSource)
+                  console.log('Dish image_url before resolver:', item.image_url)
+                  const imageUrl = getDirectAppwriteUrl(DISHES_BUCKET_ID, imageSource)
+                  console.log('Dish resolved image URL:', imageUrl)
                   const imageFailed = Boolean(failedItemImages[item.id])
                   const hasUsableImage = Boolean(imageUrl) && !imageFailed
 

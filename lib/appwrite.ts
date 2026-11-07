@@ -56,10 +56,18 @@ export const databases = new Databases(client);
 export const storage = new Storage(client);
 export const account = new Account(client);
 
-export function getDirectAppwriteUrl(bucketId: string, fileId?: string) {
-  if (!fileId) return null;
-  if (fileId.startsWith('http')) return fileId;
-  return storage.getFilePreview(bucketId, fileId);
+export function getDirectAppwriteUrl(
+  bucketId: string,
+  imageRef?: string
+): string | null {
+  if (!imageRef || imageRef.trim() === '') return null;
+
+  if (imageRef.startsWith('http://') || imageRef.startsWith('https://')) {
+    return imageRef;
+  }
+
+  // Appwrite SDK v16 returns the preview URL as a string.
+  return storage.getFilePreview(bucketId, imageRef);
 }
 
 export { client };
