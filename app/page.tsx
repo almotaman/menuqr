@@ -4380,6 +4380,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [failedItemImages, setFailedItemImages] = useState<Record<string, boolean>>({})
+  const [expandedDishId, setExpandedDishId] = useState<string | null>(null)
   const navigate = useNavigate()
   const queryTableNumber = new URLSearchParams(location.search).get('table')
   const rawTableNumber = pathTableNumber || queryTableNumber
@@ -4920,6 +4921,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   console.log('Dish resolved image URL:', imageUrl)
                   const imageFailed = Boolean(failedItemImages[item.id])
                   const hasUsableImage = Boolean(imageUrl) && !imageFailed
+                  const isExpanded = expandedDishId === item.id
+                  const toggleExpanded = () => {
+                    if (item.description?.trim()) {
+                      setExpandedDishId(current => current === item.id ? null : item.id)
+                    }
+                  }
 
                   console.log('Menu dish image:', {
                     dish: item.name,
@@ -4951,24 +4958,41 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                             }))
                           }}
                         />
-                        <CardContent className="min-w-0 flex-1 p-0">
+                        <CardContent
+                          className="min-w-0 flex-1 cursor-pointer p-0"
+                          onClick={toggleExpanded}
+                        >
                           <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
                           {item.description && (
-                            <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500 sm:text-xs">
-                              {item.description}
-                            </p>
+                            <>
+                              <p className={`mt-0.5 overflow-hidden text-[10px] text-gray-500 transition-[max-height] duration-300 sm:text-xs ${
+                                isExpanded ? 'max-h-96' : 'line-clamp-2 max-h-8'
+                              }`}>
+                                {item.description}
+                              </p>
+                              <span className="text-[10px] font-medium text-gray-400">
+                                {isExpanded ? '... less' : '... more'}
+                              </span>
+                            </>
                           )}
                         </CardContent>
                       </div>
                     ) : null}
                     <CardContent className={`flex flex-1 flex-col justify-between p-2.5 ${hasUsableImage ? 'pt-0' : ''}`}>
                       {!hasUsableImage && (
-                        <div>
+                        <div className="cursor-pointer" onClick={toggleExpanded}>
                         <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
                         {item.description && (
-                          <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500 sm:text-xs">
-                            {item.description}
-                          </p>
+                          <>
+                            <p className={`mt-0.5 overflow-hidden text-[10px] text-gray-500 transition-[max-height] duration-300 sm:text-xs ${
+                              isExpanded ? 'max-h-96' : 'line-clamp-2 max-h-8'
+                            }`}>
+                              {item.description}
+                            </p>
+                            <span className="text-[10px] font-medium text-gray-400">
+                              {isExpanded ? '... less' : '... more'}
+                            </span>
+                          </>
                         )}
                         </div>
                       )}
@@ -4978,7 +5002,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                           const quantity = cart.find(entry => entry.item.id === item.id)?.quantity || 0
                           if (item.is_available === false) {
                             return (
-                              <Button type="button" className="px-2 py-1 text-[11px]" disabled>
+                              <Button
+                                type="button"
+                                className="px-2 py-1 text-[11px]"
+                                disabled
+                                onClick={event => event.stopPropagation()}
+                              >
                                 Unavailable
                               </Button>
                             )
@@ -4988,7 +5017,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                               <Button
                                 type="button"
                                 className="rounded-lg bg-black px-2 py-1 text-[11px] font-medium text-white"
-                                onClick={() => addToCart(item)}
+                                onClick={event => {
+                                  event.stopPropagation()
+                                  addToCart(item)
+                                }}
                               >
                                 Add
                               </Button>
@@ -5002,7 +5034,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                                 size="icon"
                                 className="h-7 w-7"
                                 aria-label={`Decrease ${item.name} quantity`}
-                                onClick={() => updateCartQuantity(item.id, -1)}
+                                onClick={event => {
+                                  event.stopPropagation()
+                                  updateCartQuantity(item.id, -1)
+                                }}
                               >
                                 {quantity === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                               </Button>
@@ -5013,7 +5048,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                                 size="icon"
                                 className="h-7 w-7"
                                 aria-label={`Increase ${item.name} quantity`}
-                                onClick={() => addToCart(item)}
+                                onClick={event => {
+                                  event.stopPropagation()
+                                  addToCart(item)
+                                }}
                               >
                                 <Plus className="h-3.5 w-3.5" />
                               </Button>
