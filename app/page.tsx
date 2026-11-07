@@ -4263,10 +4263,16 @@ const DISHES_BUCKET_ID =
   process.env.NEXT_PUBLIC_APPWRITE_DISHES_BUCKET_ID ||
   process.env.NEXT_PUBLIC_APPWRITE_BUCKET_ID ||
   'menu-assets'
+const LOGOS_BUCKET_ID = process.env.NEXT_PUBLIC_APPWRITE_LOGOS_BUCKET_ID || ''
 
 if (typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_APPWRITE_DISHES_BUCKET_ID) {
   console.warn(
     'NEXT_PUBLIC_APPWRITE_DISHES_BUCKET_ID is undefined. Dish image URLs are using the generic bucket fallback.'
+  )
+}
+if (typeof window !== 'undefined' && !LOGOS_BUCKET_ID) {
+  console.warn(
+    'NEXT_PUBLIC_APPWRITE_LOGOS_BUCKET_ID is undefined. Restaurant logos cannot be resolved from Appwrite Storage.'
   )
 }
 
@@ -4480,9 +4486,18 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         const restaurantName = String(
           restaurant.name || restaurant.subdomain || 'Restaurant'
         )
+        const logoUrl = LOGOS_BUCKET_ID
+          ? getDirectAppwriteUrl(
+              LOGOS_BUCKET_ID,
+              typeof restaurant.logo_url === 'string' ? restaurant.logo_url : undefined
+            )
+          : null
+        console.log('Restaurant logo_url:', restaurant.logo_url)
+        console.log('Resolved restaurant logo URL:', logoUrl)
 
         setMenuData({
           restaurantName,
+          logoUrl,
           menuName: menuName?.replace(/-/g, ' ') || 'Menu',
           items: menuItems,
         })
@@ -4726,7 +4741,25 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       <AnimatedPage>
         <div className="flex flex-col min-h-screen">
           <div className="container mx-auto px-4 py-8 flex-grow">
-            <h1 className="text-3xl font-bold mb-2 capitalize">{menuData.restaurantName}</h1>
+            <div className="mb-2 flex items-center gap-3">
+              {menuData.logoUrl ? (
+                <img
+                  src={menuData.logoUrl}
+                  alt={menuData.restaurantName}
+                  loading="lazy"
+                  className="h-12 w-12 rounded-full object-cover"
+                  onError={event => {
+                    console.error('Restaurant logo load error:', event.currentTarget.src)
+                    event.currentTarget.style.display = 'none'
+                  }}
+                />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 font-bold">
+                  {menuData.restaurantName?.[0]?.toUpperCase() || 'R'}
+                </div>
+              )}
+              <h1 className="text-3xl font-bold capitalize">{menuData.restaurantName}</h1>
+            </div>
             <h2 className="text-xl text-gray-600 mb-6">Available Menus</h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {menuData.availableMenus.map((menu: any, index: number) => (
@@ -4789,7 +4822,25 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       <div className="flex min-h-screen flex-col bg-white">
         <div className="container mx-auto flex-grow px-0 py-0 sm:px-4 sm:py-8">
           <div className="px-4 py-4 sm:px-0 sm:py-0">
-            <h1 className="text-3xl font-bold mb-1 sm:mb-2 capitalize">{menuData?.restaurantName}</h1>
+            <div className="mb-1 flex items-center gap-3 sm:mb-2">
+              {menuData?.logoUrl ? (
+                <img
+                  src={menuData.logoUrl}
+                  alt={menuData.restaurantName}
+                  loading="lazy"
+                  className="h-12 w-12 rounded-full object-cover"
+                  onError={event => {
+                    console.error('Restaurant logo load error:', event.currentTarget.src)
+                    event.currentTarget.style.display = 'none'
+                  }}
+                />
+              ) : (
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 font-bold">
+                  {menuData?.restaurantName?.[0]?.toUpperCase() || 'R'}
+                </div>
+              )}
+              <h1 className="text-3xl font-bold capitalize">{menuData?.restaurantName}</h1>
+            </div>
             <h2 className="text-xl text-gray-600 mb-3 sm:mb-6 capitalize">{menuData?.menuName}</h2>
           </div>
           {hasTableContext && (
