@@ -169,7 +169,7 @@ export default function CashierPage() {
 
         unsubscribe = client.subscribe(
           `databases.${databaseId}.collections.${ordersCollectionId}.documents`,
-          realtimeEvent => {
+          async realtimeEvent => {
             const order = realtimeEvent.payload as unknown as OrderDocument
             const isCreated = realtimeEvent.events.some(event => event.endsWith('.create'))
             if (
@@ -179,13 +179,24 @@ export default function CashierPage() {
               !isActiveOrderStatus(order.status)
             ) return
 
+            let completeOrder = order
+            try {
+              completeOrder = await databases.getDocument(
+                databaseId,
+                ordersCollectionId,
+                order.$id
+              ) as unknown as OrderDocument
+            } catch (fetchError) {
+              console.error('Failed to fetch complete realtime order document', fetchError)
+            }
+
             setOrders(current => [
-              order,
-              ...current.filter(existing => existing.$id !== order.$id),
+              completeOrder,
+              ...current.filter(existing => existing.$id !== completeOrder.$id),
             ])
-            setPrintOrder(order)
+            setPrintOrder(completeOrder)
             playSound()
-            window.setTimeout(() => window.print(), 150)
+            window.setTimeout(() => window.print(), 300)
           }
         )
       } catch (loadError) {
