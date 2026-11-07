@@ -4772,14 +4772,14 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   </button>
                 ))}
               </div>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 px-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
                 {visibleItems.map((item, index) => (
                   <Card
                     key={item.id || index}
-                    className="cursor-pointer hover:shadow-lg transition-shadow overflow-hidden"
+                    className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
                   >
                     {item.image_url ? (
-                      <div className="h-48 w-full">
+                      <div className="h-24 w-full sm:h-36">
                         <img
                           src={item.image_url}
                           alt={item.name}
@@ -4787,53 +4787,63 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                         />
                       </div>
                     ) : (
-                      <div className="flex h-48 w-full items-center justify-center bg-gray-100">
+                      <div className="flex h-24 w-full items-center justify-center bg-gray-100 sm:h-36">
                         <span className="text-sm text-gray-400">No image</span>
                       </div>
                     )}
-                    <CardContent className="p-4">
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="text-lg font-semibold">{item.name}</h3>
-                          <span className="shrink-0 text-lg font-medium">{item.price}</span>
-                        </div>
+                    <CardContent className="flex flex-1 flex-col justify-between p-2.5">
+                      <div>
+                        <h3 className="line-clamp-2 text-xs font-bold text-gray-900 sm:text-sm">{item.name}</h3>
                         {item.description && (
-                          <p className="line-clamp-2 text-sm text-gray-400">
+                          <p className="mt-0.5 line-clamp-2 text-[10px] text-gray-500 sm:text-xs">
                             {item.description}
                           </p>
                         )}
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-gray-800 sm:text-sm">{item.price}</span>
                         {(() => {
                           const quantity = cart.find(entry => entry.item.id === item.id)?.quantity || 0
                           if (item.is_available === false) {
-                            return <Button type="button" className="w-full" disabled>Unavailable</Button>
+                            return (
+                              <Button type="button" className="px-2 py-1 text-[11px]" disabled>
+                                Unavailable
+                              </Button>
+                            )
                           }
                           if (quantity === 0) {
                             return (
-                              <Button type="button" className="w-full" onClick={() => addToCart(item)}>
+                              <Button
+                                type="button"
+                                className="rounded-lg bg-black px-2 py-1 text-[11px] font-medium text-white"
+                                onClick={() => addToCart(item)}
+                              >
                                 Add
                               </Button>
                             )
                           }
                           return (
-                            <div className="flex items-center justify-between rounded-md border p-1">
+                            <div className="flex items-center gap-1 rounded-md border p-0.5">
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
+                                className="h-7 w-7"
                                 aria-label={`Decrease ${item.name} quantity`}
                                 onClick={() => updateCartQuantity(item.id, -1)}
                               >
-                                {quantity === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
+                                {quantity === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
                               </Button>
-                              <span className="font-semibold">{quantity}</span>
+                              <span className="min-w-4 text-center text-xs font-semibold">{quantity}</span>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
+                                className="h-7 w-7"
                                 aria-label={`Increase ${item.name} quantity`}
                                 onClick={() => addToCart(item)}
                               >
-                                <Plus className="h-4 w-4" />
+                                <Plus className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           )
