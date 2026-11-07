@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Query } from 'appwrite'
 import { Clock3, Loader2, LockKeyhole, RefreshCw } from 'lucide-react'
 import { databases, client, getAppwriteConfig } from '@/lib/appwrite'
@@ -88,6 +88,7 @@ export default function CashierPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
+  const handledRealtimeOrderIds = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!printOrder) return
@@ -132,6 +133,7 @@ export default function CashierPage() {
 
     let unsubscribe: (() => void) | undefined
     let cancelled = false
+    handledRealtimeOrderIds.current.clear()
 
     const loadOrders = async () => {
       setIsLoading(true)
@@ -186,9 +188,13 @@ export default function CashierPage() {
           )
         }
 
-        unsubscribe = client.subscribe(
+        if (cancelled) return
+
+        const stopSubscription = client.subscribe(
           `databases.${databaseId}.collections.${ordersCollectionId}.documents`,
           async realtimeEvent => {
+            if (cancelled) return
+
             const order = realtimeEvent.payload as unknown as OrderDocument
             const isCreated = realtimeEvent.events.some(event => event.endsWith('.create'))
             if (
@@ -197,6 +203,9 @@ export default function CashierPage() {
               order.restaurant_id !== currentRestaurantId ||
               !isActiveOrderStatus(order.status)
             ) return
+
+            if (handledRealtimeOrderIds.current.has(order.$id)) return
+            handledRealtimeOrderIds.current.add(order.$id)
 
             let completeOrder = order
             try {
@@ -209,6 +218,8 @@ export default function CashierPage() {
               console.error('Failed to fetch complete realtime order document', fetchError)
             }
 
+            if (cancelled) return
+
             setOrders(current => [
               completeOrder,
               ...current.filter(existing => existing.$id !== completeOrder.$id),
@@ -217,6 +228,7 @@ export default function CashierPage() {
             playSound()
           }
         )
+        unsubscribe = stopSubscription
       } catch (loadError) {
         if (!cancelled) {
           setWorkspaceStatus('invalid')
