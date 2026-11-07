@@ -5128,15 +5128,17 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               >
                 ×
               </button>
-              <div className="mb-2 text-2xl text-green-600">✓</div>
-              <h3 className="text-lg font-bold text-gray-900">Order Placed Successfully</h3>
-              <div className="my-3 rounded-xl bg-gray-100 py-2 text-xl font-black text-black">
-                Order #{completedOrder.order_number}
-              </div>
-              <p className="text-sm text-gray-600">
-                {completedOrder.table_number || 'No table specified'} · {completedOrder.status}
-              </p>
               <div id="receipt-card" className="mt-4 rounded-xl border border-gray-200 bg-white p-4 text-left">
+                <div className="mb-3 text-center">
+                  <div className="mb-1 text-2xl text-green-600">✓</div>
+                  <h3 className="text-lg font-bold text-gray-900">Order Placed Successfully</h3>
+                  <div className="my-3 rounded-xl bg-gray-100 py-2 text-xl font-black text-black">
+                    Order #{completedOrder.order_number}
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {completedOrder.table_number || 'No table specified'} · {completedOrder.status}
+                  </p>
+                </div>
                 <div className="mb-3 flex items-center justify-between border-b pb-2">
                   <span className="font-semibold">Receipt</span>
                   <span className="text-sm text-gray-500">{completedOrder.order_number}</span>
