@@ -15,6 +15,7 @@ type OrderDocument = {
   $id: string
   $createdAt?: string
   order_number?: string | number | null
+  orderNumber?: string | number | null
   restaurant_id?: string | null
   table_number?: string | number | null
   notes?: string | null
@@ -314,9 +315,8 @@ export default function CashierPage() {
         <section id="thermal-receipt" className="thermal-receipts">
           <div className="thermal-receipt receipt-kitchen">
             <h1>--- KITCHEN TICKET ---</h1>
-            <div className="my-2 border-b-2 border-black pb-2 text-center">
-              <span className="block text-xs font-bold uppercase tracking-widest text-gray-700">Order Number</span>
-              <span className="block text-3xl font-black">{printOrder.order_number || '#---'}</span>
+            <div className="my-1 text-center text-lg font-bold">
+              Order #{printOrder.order_number || printOrder.orderNumber || '---'}
             </div>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
@@ -330,9 +330,8 @@ export default function CashierPage() {
           </div>
           <div className="thermal-receipt receipt-customer">
             <h1>--- CUSTOMER CHECK ---</h1>
-            <div className="my-2 border-b-2 border-black pb-2 text-center">
-              <span className="block text-xs font-bold uppercase tracking-widest text-gray-700">Order Number</span>
-              <span className="block text-3xl font-black">{printOrder.order_number || '#---'}</span>
+            <div className="my-1 text-center text-lg font-bold">
+              Order #{printOrder.order_number || printOrder.orderNumber || '---'}
             </div>
             <p className="receipt-table">{printOrder.table_number || 'N/A'}</p>
             <p>{printOrder.$createdAt ? new Date(printOrder.$createdAt).toLocaleString() : ''}</p>
