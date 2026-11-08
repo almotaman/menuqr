@@ -16,7 +16,7 @@ import { Bar, Pie } from 'react-chartjs-2';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ChevronDown, Menu, Plus, Minus, Trash2, Loader2, QrCode, Settings, Users, X, Smartphone, Tablet, Monitor, Check, Clock, Eye, RotateCw, LineChart, Languages, FolderTree, Filter, Search } from 'lucide-react'
+import { ChevronDown, Menu, Plus, Minus, Trash2, Loader2, QrCode, Settings, Users, X, Smartphone, Tablet, Monitor, Check, Clock, Eye, RotateCw, LineChart, Languages, FolderTree, Filter, Search, UserRound, UsersRound } from 'lucide-react'
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -4411,7 +4411,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [failedItemImages, setFailedItemImages] = useState<Record<string, boolean>>({})
   const [expandedDishId, setExpandedDishId] = useState<string | null>(null)
-  const [diningMode, setDiningMode] = useState<'alone' | 'group'>('group')
+  const [diningMode, setDiningMode] = useState<'alone' | 'group' | null>(null)
+  const [isDiningModeModalOpen, setIsDiningModeModalOpen] = useState(false)
   const navigate = useNavigate()
   const queryTableNumber = new URLSearchParams(location.search).get('table')
   const rawTableNumber = pathTableNumber || queryTableNumber
@@ -4421,6 +4422,32 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       ? rawTableNumber.trim()
       : `Table ${rawTableNumber.trim()}`
     : 'Table 1'
+
+  const chooseDiningMode = (mode: 'alone' | 'group') => {
+    setDiningMode(mode)
+    setIsDiningModeModalOpen(false)
+    try {
+      window.sessionStorage.setItem('dining_mode', mode)
+    } catch (storageError) {
+      console.warn('Unable to persist dining mode in session storage', storageError)
+    }
+  }
+
+  useEffect(() => {
+    if (!menuData) return
+
+    try {
+      const savedMode = window.sessionStorage.getItem('dining_mode')
+      if (savedMode === 'alone' || savedMode === 'group') {
+        setDiningMode(savedMode)
+      } else {
+        setIsDiningModeModalOpen(true)
+      }
+    } catch (storageError) {
+      console.warn('Unable to read dining mode from session storage', storageError)
+      setIsDiningModeModalOpen(true)
+    }
+  }, [menuData])
 
   useEffect(() => {
     const fetchMenuData = async () => {
@@ -4656,11 +4683,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         price: Number.parseFloat(entry.item.price) || 0,
         notes: entry.notes || '',
       }))
-      const orderStatus = diningMode === 'alone' ? 'sent_to_kitchen' : 'pending_buffer'
+      const selectedDiningMode = diningMode || 'group'
+      const orderStatus = selectedDiningMode === 'alone' ? 'sent_to_kitchen' : 'pending_buffer'
       const batchExpiresAt = new Date(Date.now() + 7 * 60 * 1000).toISOString()
       let existingBuffer: AppwriteDocument | undefined
 
-      if (diningMode === 'group') {
+      if (selectedDiningMode === 'group') {
         const bufferCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString()
         const bufferResponse = await databases.listDocuments(
           databaseId,
@@ -4727,8 +4755,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         total_price: mergedTotal,
         status: orderStatus,
         notes: orderNotes.trim(),
-        dining_mode: diningMode,
-        batch_expires_at: diningMode === 'group'
+        dining_mode: selectedDiningMode,
+        batch_expires_at: selectedDiningMode === 'group'
           ? (existingBuffer?.batch_expires_at as string | undefined) || batchExpiresAt
           : undefined,
       }
@@ -4763,7 +4791,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       setOrderNotes('')
       setIsOrderOpen(false)
       setOrderConfirmation(
-        diningMode === 'alone'
+        selectedDiningMode === 'alone'
           ? `Order sent to kitchen! Your order for ${tableNumber} has been placed.`
           : `Order added to the group buffer for ${tableNumber}. It will be sent to the kitchen in 7 minutes.`
       )
@@ -5363,7 +5391,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                           ? 'border-black bg-gray-900 text-white'
                           : 'border-gray-200 bg-white text-gray-700'
                       }`}
-                      onClick={() => setDiningMode('group')}
+                      onClick={() => chooseDiningMode('group')}
                     >
                       With friends
                     </button>
@@ -5374,7 +5402,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                           ? 'border-black bg-gray-900 text-white'
                           : 'border-gray-200 bg-white text-gray-700'
                       }`}
-                      onClick={() => setDiningMode('alone')}
+                      onClick={() => chooseDiningMode('alone')}
                     >
                       Dining alone
                     </button>
@@ -5413,6 +5441,51 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             </div>
           </DialogContent>
         </Dialog>
+
+        {isDiningModeModalOpen && menuData && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-md">
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+              <div className="mb-6 text-center">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Welcome to {menuData.restaurantName}!
+                </h2>
+                <p className="mt-2 text-gray-600">How are you dining today?</p>
+              </div>
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 p-4 text-left transition-colors hover:border-gray-900 hover:bg-gray-50"
+                  onClick={() => chooseDiningMode('alone')}
+                >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
+                    <UserRound className="h-6 w-6" />
+                  </span>
+                  <span>
+                    <span className="block font-bold text-gray-900">Dining Alone</span>
+                    <span className="mt-1 block text-sm text-gray-600">
+                      Orders are sent directly to the kitchen immediately.
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 p-4 text-left transition-colors hover:border-gray-900 hover:bg-gray-50"
+                  onClick={() => chooseDiningMode('group')}
+                >
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
+                    <UsersRound className="h-6 w-6" />
+                  </span>
+                  <span>
+                    <span className="block font-bold text-gray-900">Friends and Family</span>
+                    <span className="mt-1 block text-sm text-gray-600">
+                      Orders from this table are grouped into one ticket for up to 7 minutes.
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {completedOrder && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
