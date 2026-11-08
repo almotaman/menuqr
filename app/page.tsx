@@ -4224,6 +4224,8 @@ interface CartItem {
   quantity: number;
   notes?: string;
   variant?: ItemVariant;
+  variantName?: string;
+  variantPrice: number;
   addOns?: ItemAddOn[];
   unitPrice: number;
 }
@@ -4232,7 +4234,15 @@ interface CompletedOrder {
   order_number: string;
   restaurant_id: string;
   table_number: string;
-  items: Array<{ name: string; quantity: number; price: number; notes?: string }>;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    variantName?: string;
+    variantPrice?: number;
+    addOns?: Array<{ name: string; price: number }>;
+    notes?: string;
+  }>;
   total_price: number;
   status: string;
   notes: string;
@@ -4287,12 +4297,18 @@ function parseStoredOrderItems(value: unknown): Array<{
   name: string;
   quantity: number;
   price: number;
+  variantName?: string;
+  variantPrice?: number;
+  addOns?: Array<{ name: string; price: number }>;
   notes?: string;
 }> {
   if (Array.isArray(value)) return value as Array<{
     name: string;
     quantity: number;
     price: number;
+    variantName?: string;
+    variantPrice?: number;
+    addOns?: Array<{ name: string; price: number }>;
     notes?: string;
   }>
   if (typeof value !== 'string') return []
@@ -4701,6 +4717,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         quantity,
         notes: notes.trim() || undefined,
         variant,
+        variantName: variant?.name,
+        variantPrice: variant?.price || 0,
         addOns,
         unitPrice,
       }]
@@ -4763,11 +4781,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       name: entry.item.name,
       quantity: entry.quantity,
       price: entry.unitPrice,
-      notes: [
-        entry.variant ? `Variant: ${entry.variant.name}` : '',
-        entry.addOns?.length ? `Add-ons: ${entry.addOns.map(addOn => addOn.name).join(', ')}` : '',
-        entry.notes || '',
-      ].filter(Boolean).join(' | '),
+      variantName: entry.variantName,
+      variantPrice: entry.variantPrice,
+      addOns: entry.addOns?.map(addOn => ({
+        name: addOn.name,
+        price: addOn.price,
+      })) || [],
+      notes: entry.notes,
     }))
     const optimisticOrder: CompletedOrder = {
       order_number: '---',
@@ -4831,10 +4851,21 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
         const mergedItems = existingBuffer
           ? [...parseStoredOrderItems(existingBuffer.items), ...itemsSnapshot].reduce<
-              Array<{ name: string; quantity: number; price: number; notes?: string }>
+              Array<{
+                name: string;
+                quantity: number;
+                price: number;
+                variantName?: string;
+                variantPrice?: number;
+                addOns?: Array<{ name: string; price: number }>;
+                notes?: string;
+              }>
             >((merged, item) => {
               const existing = merged.find(
-                candidate => candidate.name === item.name && candidate.price === item.price
+                candidate =>
+                  candidate.name === item.name &&
+                  candidate.variantName === item.variantName &&
+                  JSON.stringify(candidate.addOns || []) === JSON.stringify(item.addOns || [])
               )
               if (existing) {
                 existing.quantity += item.quantity
@@ -5354,36 +5385,32 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             if (!open) setDetailItem(null)
           }}
         >
-          <DialogContent className="fixed inset-x-0 bottom-0 z-[9999] flex max-h-[90vh] w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-t-3xl bg-white p-0 text-left shadow-2xl sm:inset-x-auto sm:left-[50%] sm:top-[50%] sm:w-[min(520px,90vw)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
+          <DialogContent className="fixed inset-x-0 bottom-0 z-[9999] flex max-h-[88vh] w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-t-2xl bg-white p-0 text-left shadow-2xl sm:inset-x-auto sm:left-[50%] sm:top-[50%] sm:w-[min(520px,90vw)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
             {detailItem && (
               <>
-                {(() => {
-                  const imageUrl = getDirectAppwriteUrl(DISHES_BUCKET_ID, detailItem.image_url)
-                  return imageUrl ? (
-                    <img src={imageUrl} alt={detailItem.name} loading="lazy" className="h-52 w-full rounded-t-3xl object-cover sm:rounded-t-2xl" />
-                  ) : null
-                })()}
-                <div className="space-y-4 p-5">
+                <div className="space-y-3 p-4">
                   <DialogHeader className="text-left">
-                    <DialogTitle className="text-xl font-bold text-gray-900">{detailItem.name}</DialogTitle>
-                    <DialogDescription>{detailItem.description || 'Customize your order.'}</DialogDescription>
+                    <DialogTitle className="text-lg font-bold text-gray-900">{detailItem.name}</DialogTitle>
+                    <DialogDescription className="text-xs">{detailItem.description || 'Customize your order.'}</DialogDescription>
                   </DialogHeader>
-                  <div className="text-lg font-semibold text-gray-800">
-                    Base price: {Number.parseFloat(detailItem.price).toFixed(2)} EGP
+                  <div className="text-base font-semibold text-gray-800">
+                    Price: {detailUnitPrice.toFixed(2)} EGP
                   </div>
                   {detailItem.variants?.length ? (
                     <div className="space-y-2">
-                    <Label>Choose Size / Type</Label>
-                      <div className="grid gap-2">
+                      <Label className="text-sm">Choose Size / Type</Label>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {detailItem.variants.map(variant => (
                           <button
                             key={variant.id}
                             type="button"
                             onClick={() => setDetailVariant(variant)}
-                            className={`rounded-xl border p-3 text-left ${detailVariant?.id === variant.id ? 'border-black bg-gray-100' : 'border-gray-200'}`}
+                            className={`rounded-lg border px-3 py-2 text-left text-sm ${detailVariant?.id === variant.id ? 'border-black bg-gray-100' : 'border-gray-200'}`}
                           >
                             <span className="font-medium">{variant.name}</span>
-                            {variant.price ? <span className="float-right">+{variant.price.toFixed(2)} EGP</span> : null}
+                            <span className="mt-1 block text-xs text-gray-500">
+                              {variant.price ? `+${variant.price.toFixed(2)} EGP` : 'Included'}
+                            </span>
                           </button>
                         ))}
                       </div>
@@ -5391,23 +5418,18 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   ) : null}
                   {detailItem.add_ons?.length ? (
                     <div className="space-y-2">
-                      <Label>Add-ons &amp; Extras</Label>
+                      <Label className="text-sm">Add-ons &amp; Extras</Label>
                       {detailItem.add_ons.map(addOn => {
                         const checked = detailAddOns.some(selected => selected.id === addOn.id)
                         return (
-                          <label key={addOn.id} className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-colors ${checked ? 'border-black bg-gray-50' : 'border-gray-200'}`}>
-                            <span>{addOn.name}</span>
-                            <span className="flex items-center gap-2">
-                              <span>+{addOn.price.toFixed(2)} EGP</span>
-                              <button
-                                type="button"
-                                aria-label={`${checked ? 'Remove' : 'Add'} ${addOn.name}`}
-                                onClick={() => setDetailAddOns(current => checked ? current.filter(selected => selected.id !== addOn.id) : [...current, addOn])}
-                                className={`flex h-7 w-7 items-center justify-center rounded-full text-lg font-semibold ${checked ? 'bg-black text-white' : 'bg-gray-100 text-gray-800'}`}
-                              >
-                                {checked ? '✓' : '+'}
-                              </button>
-                            </span>
+                          <label key={addOn.id} className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${checked ? 'border-black bg-gray-50' : 'border-gray-200'}`}>
+                            <span>{addOn.name} <span className="text-xs text-gray-500">+{addOn.price.toFixed(2)} EGP</span></span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => setDetailAddOns(current => checked ? current.filter(selected => selected.id !== addOn.id) : [...current, addOn])}
+                              className="h-4 w-4 accent-black"
+                            />
                           </label>
                         )
                       })}
@@ -5416,10 +5438,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   <Textarea
                     value={detailNotes}
                     onChange={event => setDetailNotes(event.target.value)}
-                    placeholder="Special instructions (optional)"
+                    placeholder="e.g., No onions"
                     rows={2}
+                    className="text-sm"
                   />
-                  <div className="sticky bottom-0 -mx-5 flex items-center justify-between gap-3 border-t bg-white p-5">
+                  <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-2 border-t bg-white p-3">
                     <div className="flex items-center gap-3 rounded-xl border p-1">
                       <Button type="button" variant="ghost" size="icon" onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}><Minus className="h-4 w-4" /></Button>
                       <span className="min-w-5 text-center font-semibold">{detailQuantity}</span>

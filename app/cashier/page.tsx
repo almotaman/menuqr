@@ -9,6 +9,10 @@ type OrderItem = {
   name: string
   quantity: number
   price: number
+  variantName?: string
+  variantPrice?: number
+  addOns?: Array<{ name: string; price: number }>
+  notes?: string
 }
 
 type OrderDocument = {
@@ -416,7 +420,20 @@ export default function CashierPage() {
                   <div className="space-y-2 border-y border-slate-800 py-4">
                     {parseOrderItems(order.items).map((item, index) => (
                       <div key={`${order.$id}-${item.name}-${index}`} className="flex justify-between gap-3">
-                        <span><strong>{item.quantity}x</strong> {item.name}</span>
+                        <div>
+                          <div><strong>{item.quantity}x</strong> {item.name}</div>
+                          {item.variantName && (
+                            <div className="text-xs text-slate-400">Variant: {item.variantName}</div>
+                          )}
+                          {item.addOns?.map((addOn, addOnIndex) => (
+                            <div key={`${item.name}-addon-${addOnIndex}`} className="text-xs text-slate-400">
+                              Add-on: {addOn.name}
+                            </div>
+                          ))}
+                          {item.notes?.trim() && (
+                            <div className="text-xs text-amber-200">Note: {item.notes}</div>
+                          )}
+                        </div>
                         <span className="text-slate-400">${(Number(item.price) * item.quantity).toFixed(2)}</span>
                       </div>
                     ))}
@@ -453,7 +470,14 @@ export default function CashierPage() {
             <hr />
             {parseOrderItems(printOrder.items).map((item, index) => (
               <div key={`${printOrder.$id}-kitchen-${index}`} className="receipt-line receipt-item">
-                <strong>{item.quantity}x {item.name}</strong>
+                <div>
+                  <strong>{item.quantity}x {item.name}</strong>
+                  {item.variantName && <div>Variant: {item.variantName}</div>}
+                  {item.addOns?.map((addOn, addOnIndex) => (
+                    <div key={`${item.name}-kitchen-addon-${addOnIndex}`}>Add-on: {addOn.name}</div>
+                  ))}
+                  {item.notes?.trim() && <div>Note: {item.notes}</div>}
+                </div>
               </div>
             ))}
           </div>
@@ -468,7 +492,14 @@ export default function CashierPage() {
             <hr />
             {parseOrderItems(printOrder.items).map((item, index) => (
               <div key={`${printOrder.$id}-customer-${index}`} className="receipt-line">
-                <span>{item.quantity}x {item.name}</span>
+                <div>
+                  <div>{item.quantity}x {item.name}</div>
+                  {item.variantName && <div>Variant: {item.variantName}</div>}
+                  {item.addOns?.map((addOn, addOnIndex) => (
+                    <div key={`${item.name}-customer-addon-${addOnIndex}`}>Add-on: {addOn.name}</div>
+                  ))}
+                  {item.notes?.trim() && <div>Note: {item.notes}</div>}
+                </div>
                 <span>${(Number(item.price) * item.quantity).toFixed(2)}</span>
               </div>
             ))}
