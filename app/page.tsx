@@ -4207,13 +4207,13 @@ interface MenuItem {
 }
 
 interface ItemVariant {
-  id?: string;
+  id: string;
   name: string;
-  price?: number;
+  price: number;
 }
 
 interface ItemAddOn {
-  id?: string;
+  id: string;
   name: string;
   price: number;
 }
@@ -4301,6 +4301,19 @@ function parseStoredOrderItems(value: unknown): Array<{
     const parsed = JSON.parse(value)
     return Array.isArray(parsed) ? parsed : []
   } catch {
+    return []
+  }
+}
+
+function parseOptionArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string' || !value.trim()) return []
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.warn('Unable to parse menu item options:', error)
     return []
   }
 }
@@ -4406,8 +4419,7 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
   }
 
   function normalizeItemVariants(value: unknown): ItemVariant[] {
-    if (!Array.isArray(value)) return []
-    return value
+    return parseOptionArray(value)
       .map<ItemVariant | null>((variant, index) => {
         if (typeof variant === 'string') return { id: `variant-${index}`, name: variant, price: 0 }
         if (!variant || typeof variant !== 'object') return null
@@ -4415,15 +4427,14 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
         return {
           id: String(source.id || source.$id || `variant-${index}`),
           name: String(source.name || source.label || `Option ${index + 1}`),
-          price: Number(source.price || 0),
+          price: Number(source.price ?? source.additional_price ?? 0) || 0,
         }
       })
       .filter((variant): variant is ItemVariant => variant !== null)
   }
 
   function normalizeItemAddOns(value: unknown): ItemAddOn[] {
-    if (!Array.isArray(value)) return []
-    return value
+    return parseOptionArray(value)
       .map<ItemAddOn | null>((addOn, index) => {
         if (typeof addOn === 'string') return { id: `add-on-${index}`, name: addOn, price: 0 }
         if (!addOn || typeof addOn !== 'object') return null
@@ -4431,7 +4442,7 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
         return {
           id: String(source.id || source.$id || `add-on-${index}`),
           name: String(source.name || source.label || `Extra ${index + 1}`),
-          price: Number(source.price || 0),
+          price: Number(source.price ?? source.additional_price ?? 0) || 0,
         }
       })
       .filter((addOn): addOn is ItemAddOn => addOn !== null)
@@ -5362,7 +5373,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   </div>
                   {detailItem.variants?.length ? (
                     <div className="space-y-2">
-                      <Label>Choose an option</Label>
+                    <Label>Choose Size / Type</Label>
                       <div className="grid gap-2">
                         {detailItem.variants.map(variant => (
                           <button
@@ -5380,19 +5391,22 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   ) : null}
                   {detailItem.add_ons?.length ? (
                     <div className="space-y-2">
-                      <Label>Add-ons</Label>
+                      <Label>Add-ons &amp; Extras</Label>
                       {detailItem.add_ons.map(addOn => {
                         const checked = detailAddOns.some(selected => selected.id === addOn.id)
                         return (
-                          <label key={addOn.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-gray-200 p-3">
+                          <label key={addOn.id} className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-colors ${checked ? 'border-black bg-gray-50' : 'border-gray-200'}`}>
                             <span>{addOn.name}</span>
                             <span className="flex items-center gap-2">
                               <span>+{addOn.price.toFixed(2)} EGP</span>
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => setDetailAddOns(current => checked ? current.filter(selected => selected.id !== addOn.id) : [...current, addOn])}
-                              />
+                              <button
+                                type="button"
+                                aria-label={`${checked ? 'Remove' : 'Add'} ${addOn.name}`}
+                                onClick={() => setDetailAddOns(current => checked ? current.filter(selected => selected.id !== addOn.id) : [...current, addOn])}
+                                className={`flex h-7 w-7 items-center justify-center rounded-full text-lg font-semibold ${checked ? 'bg-black text-white' : 'bg-gray-100 text-gray-800'}`}
+                              >
+                                {checked ? '✓' : '+'}
+                              </button>
                             </span>
                           </label>
                         )
@@ -5405,7 +5419,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                     placeholder="Special instructions (optional)"
                     rows={2}
                   />
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="sticky bottom-0 -mx-5 flex items-center justify-between gap-3 border-t bg-white p-5">
                     <div className="flex items-center gap-3 rounded-xl border p-1">
                       <Button type="button" variant="ghost" size="icon" onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}><Minus className="h-4 w-4" /></Button>
                       <span className="min-w-5 text-center font-semibold">{detailQuantity}</span>
@@ -5468,6 +5482,14 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       <p className="text-sm text-gray-500">
                         ${entry.unitPrice.toFixed(2)} each
                       </p>
+                      {entry.addOns?.length ? (
+                        <p className="text-xs text-gray-500">
+                          Add-ons: {entry.addOns.map(addOn => addOn.name).join(', ')}
+                        </p>
+                      ) : null}
+                      {entry.notes ? (
+                        <p className="text-xs text-gray-500">Note: {entry.notes}</p>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
