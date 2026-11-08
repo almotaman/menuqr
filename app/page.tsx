@@ -4334,6 +4334,13 @@ function parseOptionArray(value: unknown): unknown[] {
   }
 }
 
+function getMenuItemStartingPrice(item: MenuItem): number {
+  if (item.variants?.length) {
+    return Math.min(...item.variants.map(variant => variant.price))
+  }
+  return Number.parseFloat(item.price) || 0
+}
+
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
 const DISHES_BUCKET_ID =
@@ -4686,8 +4693,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     addOns: ItemAddOn[] = []
   ) => {
     const unitPrice =
-      (Number.parseFloat(item.price) || 0) +
-      (variant?.price || 0) +
+      (variant ? variant.price : Number.parseFloat(item.price) || 0) +
       addOns.reduce((total, addOn) => total + addOn.price, 0)
     const instanceId = [
       item.id,
@@ -5013,8 +5019,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   }
 
   const detailUnitPrice = detailItem
-    ? (Number.parseFloat(detailItem.price) || 0) +
-      (detailVariant?.price || 0) +
+    ? (detailVariant ? detailVariant.price : Number.parseFloat(detailItem.price) || 0) +
       detailAddOns.reduce((total, addOn) => total + addOn.price, 0)
     : 0
 
@@ -5177,7 +5182,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                           {variant.name}
                         </span>
                         <span className="mt-1 block text-xs text-gray-500">
-                          {variant.price ? `+${variant.price.toFixed(2)} EGP` : 'Included'}
+                          {variant.price.toFixed(2)} EGP
                         </span>
                       </button>
                     ))}
@@ -5453,7 +5458,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-gray-800 sm:text-sm">{item.price}</span>
+                        <span className="text-xs font-semibold text-gray-800 sm:text-sm">
+                          {item.variants?.length ? 'From ' : ''}
+                          {getMenuItemStartingPrice(item).toFixed(2)} EGP
+                        </span>
                         {(() => {
                           const quantity = cart
                             .filter(entry => entry.item.id === item.id)
