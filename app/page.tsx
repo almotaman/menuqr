@@ -4495,7 +4495,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [failedItemImages, setFailedItemImages] = useState<Record<string, boolean>>({})
   const [expandedDishId, setExpandedDishId] = useState<string | null>(null)
   const [diningMode, setDiningMode] = useState<'alone' | 'group' | null>(null)
-  const [isDiningModeModalOpen, setIsDiningModeModalOpen] = useState(false)
+  const [isDiningModeOnboarding, setIsDiningModeOnboarding] = useState(false)
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null)
   const [detailVariant, setDetailVariant] = useState<ItemVariant | undefined>(undefined)
   const [detailAddOns, setDetailAddOns] = useState<ItemAddOn[]>([])
@@ -4515,29 +4515,43 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
   const chooseDiningMode = (mode: 'alone' | 'group') => {
     setDiningMode(mode)
-    setIsDiningModeModalOpen(false)
+    setIsDiningModeOnboarding(false)
     try {
+      window.localStorage.setItem('dining_mode', mode)
+      window.localStorage.setItem('dining_table', tableNumber)
       window.sessionStorage.setItem('dining_mode', mode)
+      window.sessionStorage.setItem('dining_table', tableNumber)
     } catch (storageError) {
       console.warn('Unable to persist dining mode in session storage', storageError)
     }
   }
 
   useEffect(() => {
-    if (!menuData) return
+    if (!menuData || !hasTableContext) {
+      setIsDiningModeOnboarding(false)
+      return
+    }
 
     try {
-      const savedMode = window.sessionStorage.getItem('dining_mode')
-      if (savedMode === 'alone' || savedMode === 'group') {
+      const savedMode =
+        window.localStorage.getItem('dining_mode') ||
+        window.sessionStorage.getItem('dining_mode')
+      const savedTable =
+        window.localStorage.getItem('dining_table') ||
+        window.sessionStorage.getItem('dining_table')
+      const sameTable = !savedTable || savedTable === tableNumber
+
+      if ((savedMode === 'alone' || savedMode === 'group') && sameTable) {
         setDiningMode(savedMode)
+        setIsDiningModeOnboarding(false)
       } else {
-        setIsDiningModeModalOpen(true)
+        setIsDiningModeOnboarding(true)
       }
     } catch (storageError) {
       console.warn('Unable to read dining mode from session storage', storageError)
-      setIsDiningModeModalOpen(true)
+      setIsDiningModeOnboarding(true)
     }
-  }, [menuData])
+  }, [hasTableContext, menuData, tableNumber])
 
   useEffect(() => {
     if (!navigator.geolocation) return
@@ -5056,6 +5070,69 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center text-red-500">{error}</div>
       </div>
+    )
+  }
+
+  if (isDiningModeOnboarding && menuData && hasTableContext) {
+    return (
+      <AnimatedPage>
+        <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-white to-gray-50 px-4 py-8">
+          <div className="mx-auto w-full max-w-lg text-center">
+            {menuData.logoUrl ? (
+              <img
+                src={menuData.logoUrl}
+                alt={menuData.restaurantName}
+                loading="lazy"
+                className="mx-auto mb-6 h-24 w-24 rounded-full object-cover shadow-md"
+              />
+            ) : (
+              <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gray-100 text-3xl font-bold text-gray-700 shadow-md">
+                {menuData.restaurantName?.[0]?.toUpperCase() || 'R'}
+              </div>
+            )}
+            <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-gray-500">
+              {tableNumber}
+            </p>
+            <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+              Welcome to {menuData.restaurantName}!
+            </h1>
+            <p className="mt-3 text-lg text-gray-600">How are you dining today?</p>
+
+            <div className="mt-8 space-y-4 text-left">
+              <button
+                type="button"
+                className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-900 hover:shadow-md"
+                onClick={() => chooseDiningMode('alone')}
+              >
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
+                  <UserRound className="h-7 w-7" />
+                </span>
+                <span>
+                  <span className="block text-lg font-bold text-gray-900">Dining Alone</span>
+                  <span className="mt-1 block text-sm text-gray-600">
+                    Orders sent directly to the kitchen immediately.
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-900 hover:shadow-md"
+                onClick={() => chooseDiningMode('group')}
+              >
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
+                  <UsersRound className="h-7 w-7" />
+                </span>
+                <span>
+                  <span className="block text-lg font-bold text-gray-900">Friends and Family</span>
+                  <span className="mt-1 block text-sm text-gray-600">
+                    Orders grouped into one ticket for up to 7 minutes.
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </AnimatedPage>
     )
   }
 
@@ -5710,51 +5787,6 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             </div>
           </DialogContent>
         </Dialog>
-
-        {isDiningModeModalOpen && menuData && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-md">
-            <div className="mx-auto w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-              <div className="mb-6 text-center">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Welcome to {menuData.restaurantName}!
-                </h2>
-                <p className="mt-2 text-gray-600">How are you dining today?</p>
-              </div>
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 p-4 text-left transition-colors hover:border-gray-900 hover:bg-gray-50"
-                  onClick={() => chooseDiningMode('alone')}
-                >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
-                    <UserRound className="h-6 w-6" />
-                  </span>
-                  <span>
-                    <span className="block font-bold text-gray-900">Dining Alone</span>
-                    <span className="mt-1 block text-sm text-gray-600">
-                      Orders are sent directly to the kitchen immediately.
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 p-4 text-left transition-colors hover:border-gray-900 hover:bg-gray-50"
-                  onClick={() => chooseDiningMode('group')}
-                >
-                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
-                    <UsersRound className="h-6 w-6" />
-                  </span>
-                  <span>
-                    <span className="block font-bold text-gray-900">Friends and Family</span>
-                    <span className="mt-1 block text-sm text-gray-600">
-                      Orders from this table are grouped into one ticket for up to 7 minutes.
-                    </span>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {completedOrder && (
           <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
