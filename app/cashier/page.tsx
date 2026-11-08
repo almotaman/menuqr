@@ -241,15 +241,18 @@ export default function CashierPage() {
 
             const order = realtimeEvent.payload as unknown as OrderDocument
             const isCreated = realtimeEvent.events.some(event => event.endsWith('.create'))
+            const isUpdated = realtimeEvent.events.some(event => event.endsWith('.update'))
             if (
-              !isCreated ||
+              (!isCreated && !isUpdated) ||
               !order.$id ||
               order.restaurant_id !== currentRestaurantId ||
               !isActiveOrderStatus(order.status)
             ) return
 
-            if (handledRealtimeOrderIds.current.has(order.$id)) return
-            handledRealtimeOrderIds.current.add(order.$id)
+            if (isCreated) {
+              if (handledRealtimeOrderIds.current.has(order.$id)) return
+              handledRealtimeOrderIds.current.add(order.$id)
+            }
 
             let completeOrder = order
             try {
@@ -268,7 +271,7 @@ export default function CashierPage() {
               completeOrder,
               ...current.filter(existing => existing.$id !== completeOrder.$id),
             ])
-            if (completeOrder.status !== 'pending_buffer') {
+            if (isCreated && completeOrder.status !== 'pending_buffer') {
               setPrintOrder(completeOrder)
               playSound()
             }
