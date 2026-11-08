@@ -4632,15 +4632,35 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           }))
         )
 
-        const menuRes = await databases.listDocuments(
-          databaseId,
-          menuCollectionId,
-          [Query.equal('restaurant_id', restaurantId)]
+        const menuDocuments: AppwriteDocument[] = []
+        let menuCursor: string | undefined
+        const menuPageSize = 50
+
+        do {
+          const menuQueries = [
+            Query.equal('restaurant_id', restaurantId),
+            Query.limit(menuPageSize),
+          ]
+          if (menuCursor) {
+            menuQueries.push(Query.cursorAfter(menuCursor))
+          }
+
+          const menuPage = await databases.listDocuments(
+            databaseId,
+            menuCollectionId,
+            menuQueries
+          )
+          const pageDocuments = menuPage.documents as AppwriteDocument[]
+          menuDocuments.push(...pageDocuments)
+          menuCursor = pageDocuments.at(-1)?.$id
+
+          if (pageDocuments.length < menuPageSize) break
+        } while (menuCursor)
+
+        console.log(
+          `Fetched ${menuDocuments.length} menu documents for restaurant ${restaurantId}`
         )
 
-        console.log('Fetched Menu Items:', menuRes.documents)
-
-        const menuDocuments = menuRes.documents as AppwriteDocument[]
         const menuItems = menuDocuments
           .map(document => normalizeAppwriteMenu(document))
           .filter((menu): menu is Menu => Boolean(menu))
