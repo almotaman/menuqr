@@ -5713,7 +5713,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
         {isDiningModeModalOpen && menuData && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4 backdrop-blur-md">
-            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mx-auto w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
               <div className="mb-6 text-center">
                 <h2 className="text-2xl font-bold text-gray-900">
                   Welcome to {menuData.restaurantName}!
