@@ -4195,6 +4195,8 @@ interface MenuItem {
   description?: string;
   price: string;
   image_url?: string;
+  variants?: ItemVariant[];
+  add_ons?: ItemAddOn[];
   ingredients?: string[];
   allergens?: string[];
   calories?: number;
@@ -4204,10 +4206,26 @@ interface MenuItem {
   updated_at: string;
 }
 
+interface ItemVariant {
+  id?: string;
+  name: string;
+  price?: number;
+}
+
+interface ItemAddOn {
+  id?: string;
+  name: string;
+  price: number;
+}
+
 interface CartItem {
+  instanceId: string;
   item: MenuItem;
   quantity: number;
   notes?: string;
+  variant?: ItemVariant;
+  addOns?: ItemAddOn[];
+  unitPrice: number;
 }
 
 interface CompletedOrder {
@@ -4368,6 +4386,8 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
                 : undefined,
             price: String(item.price ?? ''),
             image_url: item.image_url || undefined,
+            variants: normalizeItemVariants(item.variants),
+            add_ons: normalizeItemAddOns(item.add_ons),
             ingredients: Array.isArray(item.ingredients) ? item.ingredients : undefined,
             allergens: Array.isArray(item.allergens) ? item.allergens : undefined,
             calories: typeof item.calories === 'number' ? item.calories : undefined,
@@ -4383,6 +4403,38 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
     created_at: menu.created_at || document.$createdAt || new Date().toISOString(),
     updated_at: menu.updated_at || document.$updatedAt || new Date().toISOString(),
     organization_id: String(menu.organization_id || document.organization_id || ''),
+  }
+
+  function normalizeItemVariants(value: unknown): ItemVariant[] {
+    if (!Array.isArray(value)) return []
+    return value
+      .map<ItemVariant | null>((variant, index) => {
+        if (typeof variant === 'string') return { id: `variant-${index}`, name: variant, price: 0 }
+        if (!variant || typeof variant !== 'object') return null
+        const source = variant as Record<string, unknown>
+        return {
+          id: String(source.id || source.$id || `variant-${index}`),
+          name: String(source.name || source.label || `Option ${index + 1}`),
+          price: Number(source.price || 0),
+        }
+      })
+      .filter((variant): variant is ItemVariant => variant !== null)
+  }
+
+  function normalizeItemAddOns(value: unknown): ItemAddOn[] {
+    if (!Array.isArray(value)) return []
+    return value
+      .map<ItemAddOn | null>((addOn, index) => {
+        if (typeof addOn === 'string') return { id: `add-on-${index}`, name: addOn, price: 0 }
+        if (!addOn || typeof addOn !== 'object') return null
+        const source = addOn as Record<string, unknown>
+        return {
+          id: String(source.id || source.$id || `add-on-${index}`),
+          name: String(source.name || source.label || `Extra ${index + 1}`),
+          price: Number(source.price || 0),
+        }
+      })
+      .filter((addOn): addOn is ItemAddOn => addOn !== null)
   }
 }
 
@@ -4403,9 +4455,6 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [orderNotes, setOrderNotes] = useState('')
   const [menuImageSource, setMenuImageSource] = useState<string | null>(null)
   const [menuHotspots, setMenuHotspots] = useState<MenuHotspot[]>([])
-  const [selectedHotspotItem, setSelectedHotspotItem] = useState<MenuItem | null>(null)
-  const [hotspotQuantity, setHotspotQuantity] = useState(1)
-  const [hotspotNotes, setHotspotNotes] = useState('')
   const [isTermsOpen, setIsTermsOpen] = useState(false)
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('All')
@@ -4413,6 +4462,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [expandedDishId, setExpandedDishId] = useState<string | null>(null)
   const [diningMode, setDiningMode] = useState<'alone' | 'group' | null>(null)
   const [isDiningModeModalOpen, setIsDiningModeModalOpen] = useState(false)
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null)
+  const [detailVariant, setDetailVariant] = useState<ItemVariant | undefined>(undefined)
+  const [detailAddOns, setDetailAddOns] = useState<ItemAddOn[]>([])
+  const [detailNotes, setDetailNotes] = useState('')
+  const [detailQuantity, setDetailQuantity] = useState(1)
   const [customerCoordinates, setCustomerCoordinates] = useState<{ lat: number; lng: number } | null>(null)
   const customerCoordinatesRef = useRef<{ lat: number; lng: number } | null>(null)
   const navigate = useNavigate()
@@ -4597,12 +4651,29 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     fetchMenuData()
   }, [restaurantSubdomain, menuName])
 
-  const addToCart = (item: MenuItem, quantity = 1, notes = '') => {
+  const addToCart = (
+    item: MenuItem,
+    quantity = 1,
+    notes = '',
+    variant?: ItemVariant,
+    addOns: ItemAddOn[] = []
+  ) => {
+    const unitPrice =
+      (Number.parseFloat(item.price) || 0) +
+      (variant?.price || 0) +
+      addOns.reduce((total, addOn) => total + addOn.price, 0)
+    const instanceId = [
+      item.id,
+      variant?.id || variant?.name || 'base',
+      addOns.map(addOn => addOn.id || addOn.name).sort().join(',') || 'none',
+      notes.trim(),
+    ].join('|')
+
     setCart(currentCart => {
-      const existing = currentCart.find(entry => entry.item.id === item.id)
+      const existing = currentCart.find(entry => entry.instanceId === instanceId)
       if (existing) {
         return currentCart.map(entry =>
-          entry.item.id === item.id
+          entry.instanceId === instanceId
             ? {
                 ...entry,
                 quantity: entry.quantity + quantity,
@@ -4613,15 +4684,23 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             : entry
         )
       }
-      return [...currentCart, { item, quantity, notes: notes.trim() || undefined }]
+      return [...currentCart, {
+        instanceId,
+        item,
+        quantity,
+        notes: notes.trim() || undefined,
+        variant,
+        addOns,
+        unitPrice,
+      }]
     })
   }
 
-  const updateCartQuantity = (itemId: string, change: number) => {
+  const updateCartQuantity = (instanceId: string, change: number) => {
     setCart(currentCart =>
       currentCart
         .map(entry =>
-          entry.item.id === itemId
+          entry.instanceId === instanceId
             ? { ...entry, quantity: entry.quantity + change }
             : entry
         )
@@ -4631,15 +4710,19 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
   const cartItemCount = cart.reduce((total, entry) => total + entry.quantity, 0)
   const cartTotal = cart.reduce(
-    (total, entry) => total + (Number.parseFloat(entry.item.price) || 0) * entry.quantity,
+    (total, entry) => total + entry.unitPrice * entry.quantity,
     0
   )
 
   const sendOrderViaWhatsApp = () => {
     const table = hasTableContext ? tableNumber : 'Not specified'
-    const orderLines = cart.map(entry =>
-      `${entry.quantity} x ${entry.item.name} - $${(Number.parseFloat(entry.item.price) * entry.quantity || 0).toFixed(2)}`
-    )
+    const orderLines = cart.map(entry => {
+      const options = [
+        entry.variant ? `Variant: ${entry.variant.name}` : '',
+        entry.addOns?.length ? `Add-ons: ${entry.addOns.map(addOn => addOn.name).join(', ')}` : '',
+      ].filter(Boolean).join(', ')
+      return `${entry.quantity} x ${entry.item.name}${options ? ` (${options})` : ''} - $${(entry.unitPrice * entry.quantity).toFixed(2)}`
+    })
     const message = [
       `Order for ${menuData?.restaurantName || 'restaurant'}`,
       `Table: ${table}`,
@@ -4668,8 +4751,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     const itemsSnapshot = cartSnapshot.map(entry => ({
       name: entry.item.name,
       quantity: entry.quantity,
-      price: Number.parseFloat(entry.item.price) || 0,
-      notes: entry.notes || '',
+      price: entry.unitPrice,
+      notes: [
+        entry.variant ? `Variant: ${entry.variant.name}` : '',
+        entry.addOns?.length ? `Add-ons: ${entry.addOns.map(addOn => addOn.name).join(', ')}` : '',
+        entry.notes || '',
+      ].filter(Boolean).join(' | '),
     }))
     const optimisticOrder: CompletedOrder = {
       order_number: '---',
@@ -4866,16 +4953,32 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     .filter((entry): entry is { hotspot: MenuHotspot; item: MenuItem } => Boolean(entry.item))
 
   const openHotspotItem = (item: MenuItem) => {
-    setSelectedHotspotItem(item)
-    setHotspotQuantity(1)
-    setHotspotNotes('')
+    openItemDetail(item)
   }
 
-  const addHotspotItemToCart = () => {
-    if (!selectedHotspotItem) return
-    addToCart(selectedHotspotItem, hotspotQuantity, hotspotNotes)
-    setSelectedHotspotItem(null)
+  const openItemDetail = (item: MenuItem) => {
+    if (!item.variants?.length && !item.add_ons?.length) {
+      addToCart(item)
+      return
+    }
+    setDetailItem(item)
+    setDetailVariant(item.variants?.[0])
+    setDetailAddOns([])
+    setDetailNotes('')
+    setDetailQuantity(1)
   }
+
+  const addDetailedItemToCart = () => {
+    if (!detailItem) return
+    addToCart(detailItem, detailQuantity, detailNotes, detailVariant, detailAddOns)
+    setDetailItem(null)
+  }
+
+  const detailUnitPrice = detailItem
+    ? (Number.parseFloat(detailItem.price) || 0) +
+      (detailVariant?.price || 0) +
+      detailAddOns.reduce((total, addOn) => total + addOn.price, 0)
+    : 0
 
   if (loading) {
     return (
@@ -5094,7 +5197,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   return (
                   <Card
                     key={item.id || index}
-                    className="flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
+                    className="flex cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
+                    onClick={() => openItemDetail(item)}
                   >
                     {hasUsableImage ? (
                       <div className="flex items-start gap-2 p-2.5">
@@ -5156,7 +5260,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-gray-800 sm:text-sm">{item.price}</span>
                         {(() => {
-                          const quantity = cart.find(entry => entry.item.id === item.id)?.quantity || 0
+                          const quantity = cart
+                            .filter(entry => entry.item.id === item.id)
+                            .reduce((total, entry) => total + entry.quantity, 0)
                           if (item.is_available === false) {
                             return (
                               <Button
@@ -5176,7 +5282,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                                 className="rounded-lg bg-black px-2 py-1 text-[11px] font-medium text-white"
                                 onClick={event => {
                                   event.stopPropagation()
-                                  addToCart(item)
+                                  openItemDetail(item)
                                 }}
                               >
                                 Add
@@ -5193,7 +5299,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                                 aria-label={`Decrease ${item.name} quantity`}
                                 onClick={event => {
                                   event.stopPropagation()
-                                  updateCartQuantity(item.id, -1)
+                                  const matchingEntry = cart.find(entry => entry.item.id === item.id)
+                                  if (matchingEntry) updateCartQuantity(matchingEntry.instanceId, -1)
                                 }}
                               >
                                 {quantity === 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
@@ -5207,7 +5314,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                                 aria-label={`Increase ${item.name} quantity`}
                                 onClick={event => {
                                   event.stopPropagation()
-                                  addToCart(item)
+                                  openItemDetail(item)
                                 }}
                               >
                                 <Plus className="h-3.5 w-3.5" />
@@ -5231,66 +5338,85 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         </div>
 
         <Dialog
-          open={Boolean(selectedHotspotItem)}
+          open={Boolean(detailItem)}
           onOpenChange={open => {
-            if (!open) setSelectedHotspotItem(null)
+            if (!open) setDetailItem(null)
           }}
         >
-          <DialogContent className="fixed left-[50%] top-[50%] z-[9999] my-auto flex w-[320px] max-w-[90vw] translate-x-[-50%] translate-y-[-50%] flex-col gap-2 rounded-2xl bg-white p-5 text-left shadow-2xl [&>button]:right-3 [&>button]:top-3 [&>button]:flex [&>button]:h-7 [&>button]:w-7 [&>button]:items-center [&>button]:justify-center [&>button]:rounded-full [&>button]:bg-gray-100 [&>button]:text-gray-400 [&>button]:hover:text-gray-600">
-            <DialogHeader className="mb-3 flex items-center justify-between space-y-0 text-left">
-              <DialogTitle className="mb-1 pr-6 text-base font-bold text-gray-900">{selectedHotspotItem?.name}</DialogTitle>
-              {selectedHotspotItem?.description && (
-                <DialogDescription className="mt-1 text-left text-xs">
-                  {selectedHotspotItem.description}
-                </DialogDescription>
-              )}
-            </DialogHeader>
-            {selectedHotspotItem && (
-              <div className="text-xs">
-                <div className="mb-3 text-sm font-semibold text-gray-700">
-                  {selectedHotspotItem.price} EGP
-                </div>
-                <div className="mb-3 flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 p-1.5">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0 text-sm font-bold shadow-sm"
-                    onClick={() => setHotspotQuantity(quantity => Math.max(1, quantity - 1))}
-                    aria-label="Decrease quantity"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm font-bold">{hotspotQuantity}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white p-0 text-sm font-bold shadow-sm"
-                    onClick={() => setHotspotQuantity(quantity => quantity + 1)}
-                    aria-label="Increase quantity"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="mb-3">
-                  <Label className="text-xs" htmlFor="hotspot-notes">Special Instructions / Notes (Optional)</Label>
+          <DialogContent className="fixed inset-x-0 bottom-0 z-[9999] flex max-h-[90vh] w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-t-3xl bg-white p-0 text-left shadow-2xl sm:inset-x-auto sm:left-[50%] sm:top-[50%] sm:w-[min(520px,90vw)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
+            {detailItem && (
+              <>
+                {(() => {
+                  const imageUrl = getDirectAppwriteUrl(DISHES_BUCKET_ID, detailItem.image_url)
+                  return imageUrl ? (
+                    <img src={imageUrl} alt={detailItem.name} loading="lazy" className="h-52 w-full rounded-t-3xl object-cover sm:rounded-t-2xl" />
+                  ) : null
+                })()}
+                <div className="space-y-4 p-5">
+                  <DialogHeader className="text-left">
+                    <DialogTitle className="text-xl font-bold text-gray-900">{detailItem.name}</DialogTitle>
+                    <DialogDescription>{detailItem.description || 'Customize your order.'}</DialogDescription>
+                  </DialogHeader>
+                  <div className="text-lg font-semibold text-gray-800">
+                    Base price: {Number.parseFloat(detailItem.price).toFixed(2)} EGP
+                  </div>
+                  {detailItem.variants?.length ? (
+                    <div className="space-y-2">
+                      <Label>Choose an option</Label>
+                      <div className="grid gap-2">
+                        {detailItem.variants.map(variant => (
+                          <button
+                            key={variant.id}
+                            type="button"
+                            onClick={() => setDetailVariant(variant)}
+                            className={`rounded-xl border p-3 text-left ${detailVariant?.id === variant.id ? 'border-black bg-gray-100' : 'border-gray-200'}`}
+                          >
+                            <span className="font-medium">{variant.name}</span>
+                            {variant.price ? <span className="float-right">+{variant.price.toFixed(2)} EGP</span> : null}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {detailItem.add_ons?.length ? (
+                    <div className="space-y-2">
+                      <Label>Add-ons</Label>
+                      {detailItem.add_ons.map(addOn => {
+                        const checked = detailAddOns.some(selected => selected.id === addOn.id)
+                        return (
+                          <label key={addOn.id} className="flex cursor-pointer items-center justify-between rounded-xl border border-gray-200 p-3">
+                            <span>{addOn.name}</span>
+                            <span className="flex items-center gap-2">
+                              <span>+{addOn.price.toFixed(2)} EGP</span>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => setDetailAddOns(current => checked ? current.filter(selected => selected.id !== addOn.id) : [...current, addOn])}
+                              />
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                   <Textarea
-                    id="hotspot-notes"
-                    value={hotspotNotes}
-                    onChange={event => setHotspotNotes(event.target.value)}
-                    placeholder="Special Instructions / Notes"
+                    value={detailNotes}
+                    onChange={event => setDetailNotes(event.target.value)}
+                    placeholder="Special instructions (optional)"
                     rows={2}
-                    className="mb-4 w-full resize-none rounded-xl border border-gray-200 p-2.5 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-black"
                   />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 rounded-xl border p-1">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}><Minus className="h-4 w-4" /></Button>
+                      <span className="min-w-5 text-center font-semibold">{detailQuantity}</span>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => setDetailQuantity(quantity => quantity + 1)}><Plus className="h-4 w-4" /></Button>
+                    </div>
+                    <Button type="button" className="flex-1 rounded-xl bg-black text-white" onClick={addDetailedItemToCart}>
+                      Add to Order • {(detailUnitPrice * detailQuantity).toFixed(2)} EGP
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  className="w-full rounded-xl bg-black py-2.5 text-xs font-bold text-white shadow-md transition-colors hover:bg-gray-800"
-                  disabled={selectedHotspotItem.is_available === false}
-                  onClick={addHotspotItemToCart}
-                >
-                  Add to Cart
-                </Button>
-              </div>
+              </>
             )}
           </DialogContent>
         </Dialog>
@@ -5333,11 +5459,14 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               </div>
               <div className="divide-y rounded-lg border">
                 {cart.map(entry => (
-                  <div key={entry.item.id} className="flex items-center justify-between gap-3 p-3">
+                  <div key={entry.instanceId} className="flex items-center justify-between gap-3 p-3">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{entry.item.name}</p>
+                      <p className="truncate font-medium">
+                        {entry.item.name}
+                        {entry.variant ? ` · ${entry.variant.name}` : ''}
+                      </p>
                       <p className="text-sm text-gray-500">
-                        ${(Number.parseFloat(entry.item.price) || 0).toFixed(2)} each
+                        ${entry.unitPrice.toFixed(2)} each
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -5345,7 +5474,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => updateCartQuantity(entry.item.id, -1)}
+                        onClick={() => updateCartQuantity(entry.instanceId, -1)}
                       >
                         -
                       </Button>
@@ -5354,7 +5483,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => updateCartQuantity(entry.item.id, 1)}
+                        onClick={() => updateCartQuantity(entry.instanceId, 1)}
                       >
                         +
                       </Button>
