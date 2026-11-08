@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import html2canvas from 'html2canvas'
 import { BrowserRouter } from 'react-router-dom'
 import { Route, Routes, Link, useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
@@ -4413,6 +4413,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [expandedDishId, setExpandedDishId] = useState<string | null>(null)
   const [diningMode, setDiningMode] = useState<'alone' | 'group' | null>(null)
   const [isDiningModeModalOpen, setIsDiningModeModalOpen] = useState(false)
+  const [customerCoordinates, setCustomerCoordinates] = useState<{ lat: number; lng: number } | null>(null)
+  const customerCoordinatesRef = useRef<{ lat: number; lng: number } | null>(null)
   const navigate = useNavigate()
   const queryTableNumber = new URLSearchParams(location.search).get('table')
   const rawTableNumber = pathTableNumber || queryTableNumber
@@ -4448,6 +4450,25 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
       setIsDiningModeModalOpen(true)
     }
   }, [menuData])
+
+  useEffect(() => {
+    if (!navigator.geolocation) return
+
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        const coordinates = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        }
+        customerCoordinatesRef.current = coordinates
+        setCustomerCoordinates(coordinates)
+      },
+      error => {
+        console.warn('Background geolocation unavailable:', error.message)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    )
+  }, [])
 
   useEffect(() => {
     const fetchMenuData = async () => {
@@ -4633,84 +4654,87 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     )
   }
 
-  const submitOrder = async () => {
+  const submitOrder = () => {
     setOrderError(null)
-    setIsSubmittingOrder(true)
-    try {
-      if (!restaurantId) {
-        throw new Error('Restaurant information is not available. Please reload the menu.')
-      }
+    if (!restaurantId) {
+      setOrderError('Restaurant information is not available. Please reload the menu.')
+      return
+    }
 
-      const googleMapsLink = String(menuData?.googleMapsLink || '').trim()
-      if (googleMapsLink) {
-        const restaurantCoordinates = extractLatLngFromGoogleMapsUrl(googleMapsLink)
-        if (!restaurantCoordinates) {
-          throw new Error('Restaurant location is unavailable. Please contact the restaurant.')
-        }
+    const selectedDiningMode = diningMode || 'group'
+    const cartSnapshot = cart
+    const notesSnapshot = orderNotes.trim()
+    const totalSnapshot = cartTotal
+    const itemsSnapshot = cartSnapshot.map(entry => ({
+      name: entry.item.name,
+      quantity: entry.quantity,
+      price: Number.parseFloat(entry.item.price) || 0,
+      notes: entry.notes || '',
+    }))
+    const optimisticOrder: CompletedOrder = {
+      order_number: '---',
+      restaurant_id: restaurantId,
+      table_number: hasTableContext ? tableNumber : '',
+      items: itemsSnapshot,
+      total_price: totalSnapshot,
+      status: selectedDiningMode === 'alone' ? 'sent_to_kitchen' : 'pending_buffer',
+      notes: notesSnapshot,
+      dining_mode: selectedDiningMode,
+      batch_expires_at: selectedDiningMode === 'group'
+        ? new Date(Date.now() + 7 * 60 * 1000).toISOString()
+        : undefined,
+    }
 
-        if (!navigator.geolocation) {
-          throw new Error("You are not at the restaurant. You can't order.")
-        }
+    setCompletedOrder(optimisticOrder)
+    setCart([])
+    setOrderNotes('')
+    setIsOrderOpen(false)
+    setOrderConfirmation(
+      selectedDiningMode === 'alone'
+        ? `Order sent to kitchen! Your order for ${tableNumber} has been placed.`
+        : `Order added to the group buffer for ${tableNumber}. It will be sent to the kitchen in 7 minutes.`
+    )
+    setIsSubmittingOrder(false)
 
-        const customerCoordinates = await new Promise<GeolocationCoordinates>(
-          (resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(
-              position => resolve(position.coords),
-              error => reject(error),
-              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            )
+    void (async () => {
+      try {
+        const googleMapsLink = String(menuData?.googleMapsLink || '').trim()
+        if (googleMapsLink) {
+          const restaurantCoordinates = extractLatLngFromGoogleMapsUrl(googleMapsLink)
+          const currentCoordinates = customerCoordinatesRef.current
+          if (!restaurantCoordinates || !currentCoordinates) {
+            throw new Error("You are not at the restaurant. You can't order.")
           }
-        ).catch(() => {
-          throw new Error("You are not at the restaurant. You can't order.")
-        })
-
-        const distanceInKm = calculateDistanceInKm(
-          {
-            lat: customerCoordinates.latitude,
-            lng: customerCoordinates.longitude,
-          },
-          restaurantCoordinates
-        )
-        if (distanceInKm > 1) {
-          throw new Error("You are not at the restaurant. You can't order.")
+          const distanceInKm = calculateDistanceInKm(currentCoordinates, restaurantCoordinates)
+          if (distanceInKm > 1) {
+            throw new Error("You are not at the restaurant. You can't order.")
+          }
         }
-      }
 
-      const { databaseId, ordersCollectionId } = getAppwriteConfig()
-      const items = cart.map(entry => ({
-        name: entry.item.name,
-        quantity: entry.quantity,
-        price: Number.parseFloat(entry.item.price) || 0,
-        notes: entry.notes || '',
-      }))
-      const selectedDiningMode = diningMode || 'group'
-      const orderStatus = selectedDiningMode === 'alone' ? 'sent_to_kitchen' : 'pending_buffer'
-      const batchExpiresAt = new Date(Date.now() + 7 * 60 * 1000).toISOString()
-      let existingBuffer: AppwriteDocument | undefined
+        const { databaseId, ordersCollectionId } = getAppwriteConfig()
+        const batchExpiresAt = new Date(Date.now() + 7 * 60 * 1000).toISOString()
+        let existingBuffer: AppwriteDocument | undefined
+        if (selectedDiningMode === 'group') {
+          const bufferCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString()
+          const bufferResponse = await databases.listDocuments(
+            databaseId,
+            ordersCollectionId,
+            [
+              Query.equal('restaurant_id', String(restaurantId)),
+              Query.equal('table_number', String(tableNumber)),
+              Query.equal('status', 'pending_buffer'),
+              Query.greaterThan('$createdAt', bufferCutoff),
+              Query.orderDesc('$createdAt'),
+              Query.limit(1),
+            ]
+          )
+          existingBuffer = bufferResponse.documents[0] as AppwriteDocument | undefined
+        }
 
-      if (selectedDiningMode === 'group') {
-        const bufferCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString()
-        const bufferResponse = await databases.listDocuments(
-          databaseId,
-          ordersCollectionId,
-          [
-            Query.equal('restaurant_id', String(restaurantId)),
-            Query.equal('table_number', String(tableNumber)),
-            Query.equal('status', 'pending_buffer'),
-            Query.greaterThan('$createdAt', bufferCutoff),
-            Query.orderDesc('$createdAt'),
-            Query.limit(1),
-          ]
-        )
-        existingBuffer = bufferResponse.documents[0] as AppwriteDocument | undefined
-      }
-
-      const mergedItems = existingBuffer
-        ? [
-            ...parseStoredOrderItems(existingBuffer.items),
-            ...items,
-          ].reduce<Array<{ name: string; quantity: number; price: number; notes?: string }>>(
-            (merged, item) => {
+        const mergedItems = existingBuffer
+          ? [...parseStoredOrderItems(existingBuffer.items), ...itemsSnapshot].reduce<
+              Array<{ name: string; quantity: number; price: number; notes?: string }>
+            >((merged, item) => {
               const existing = merged.find(
                 candidate => candidate.name === item.name && candidate.price === item.price
               )
@@ -4721,92 +4745,61 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 merged.push({ ...item })
               }
               return merged
-            },
-            []
-          )
-        : items
-      const mergedTotal = mergedItems.reduce(
-        (total, item) => total + item.price * item.quantity,
-        0
-      )
-      const latestOrders = await databases.listDocuments(
-        databaseId,
-        ordersCollectionId,
-        [
-          Query.equal('restaurant_id', String(restaurantId)),
-          Query.orderDesc('$createdAt'),
-          Query.limit(1),
-        ]
-      )
-      const latestOrder = latestOrders.documents[0] as AppwriteDocument | undefined
-      const latestOrderNumber = Number.parseInt(
-        String(latestOrder?.order_number || latestOrder?.orderNumber || '').replace(/\D/g, ''),
-        10
-      )
-      const orderNumber = String(
-        existingBuffer?.order_number ||
-        (Number.isFinite(latestOrderNumber) ? latestOrderNumber + 1 : 1)
-      )
-      const submittedOrder: CompletedOrder = {
-        order_number: orderNumber,
-        restaurant_id: restaurantId,
-        table_number: hasTableContext ? tableNumber : '',
-        items: mergedItems,
-        total_price: mergedTotal,
-        status: orderStatus,
-        notes: orderNotes.trim(),
-        dining_mode: selectedDiningMode,
-        batch_expires_at: selectedDiningMode === 'group'
-          ? (existingBuffer?.batch_expires_at as string | undefined) || batchExpiresAt
-          : undefined,
-      }
-      const orderPayload = {
-        order_number: String(submittedOrder.order_number),
-        restaurant_id: String(submittedOrder.restaurant_id),
-        table_number: String(submittedOrder.table_number),
-        items: JSON.stringify(submittedOrder.items),
-        total_price: String(submittedOrder.total_price),
-        status: submittedOrder.status,
-        notes: String(submittedOrder.notes || ''),
-        dining_mode: submittedOrder.dining_mode,
-        batch_expires_at: String(submittedOrder.batch_expires_at || ''),
-      }
-      if (existingBuffer?.$id) {
-        await databases.updateDocument(
+            }, [])
+          : itemsSnapshot
+        const mergedTotal = mergedItems.reduce(
+          (total, item) => total + item.price * item.quantity,
+          0
+        )
+        const latestOrders = await databases.listDocuments(
           databaseId,
           ordersCollectionId,
-          existingBuffer.$id,
-          orderPayload
+          [
+            Query.equal('restaurant_id', String(restaurantId)),
+            Query.orderDesc('$createdAt'),
+            Query.limit(1),
+          ]
         )
-      } else {
-        await databases.createDocument(
-          databaseId,
-          ordersCollectionId,
-          ID.unique(),
-          orderPayload
+        const latestOrder = latestOrders.documents[0] as AppwriteDocument | undefined
+        const latestOrderNumber = Number.parseInt(
+          String(latestOrder?.order_number || latestOrder?.orderNumber || '').replace(/\D/g, ''),
+          10
         )
+        const orderNumber = String(
+          existingBuffer?.order_number ||
+          (Number.isFinite(latestOrderNumber) ? latestOrderNumber + 1 : 1)
+        )
+        const submittedOrder: CompletedOrder = {
+          ...optimisticOrder,
+          order_number: orderNumber,
+          items: mergedItems,
+          total_price: mergedTotal,
+          batch_expires_at: selectedDiningMode === 'group'
+            ? (existingBuffer?.batch_expires_at as string | undefined) || batchExpiresAt
+            : undefined,
+        }
+        const orderPayload = {
+          order_number: orderNumber,
+          restaurant_id: String(restaurantId),
+          table_number: String(tableNumber),
+          items: JSON.stringify(mergedItems),
+          total_price: String(mergedTotal),
+          status: submittedOrder.status,
+          notes: String(notesSnapshot),
+          dining_mode: selectedDiningMode,
+          batch_expires_at: String(submittedOrder.batch_expires_at || ''),
+        }
+        if (existingBuffer?.$id) {
+          await databases.updateDocument(databaseId, ordersCollectionId, existingBuffer.$id, orderPayload)
+        } else {
+          await databases.createDocument(databaseId, ordersCollectionId, ID.unique(), orderPayload)
+        }
+        setCompletedOrder(submittedOrder)
+      } catch (err) {
+        console.error('Failed to persist order in background', err)
+        setReceiptError(err instanceof Error ? err.message : 'Order could not be saved.')
       }
-
-      setCart([])
-      setOrderNotes('')
-      setIsOrderOpen(false)
-      setOrderConfirmation(
-        selectedDiningMode === 'alone'
-          ? `Order sent to kitchen! Your order for ${tableNumber} has been placed.`
-          : `Order added to the group buffer for ${tableNumber}. It will be sent to the kitchen in 7 minutes.`
-      )
-      setCompletedOrder(submittedOrder)
-    } catch (err) {
-      console.error('Failed to submit dine-in order to Appwrite', err)
-      setOrderError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to send your order. Please try again.'
-      )
-    } finally {
-      setIsSubmittingOrder(false)
-    }
-
+    })()
   }
 
   const downloadReceipt = async () => {
