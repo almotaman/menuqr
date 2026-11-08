@@ -4218,6 +4218,8 @@ interface CompletedOrder {
   total_price: number;
   status: string;
   notes: string;
+  batch_expires_at?: string;
+  dining_mode: 'alone' | 'group';
 }
 
 interface MenuHotspot {
@@ -4261,6 +4263,28 @@ type AppwriteDocument = Record<string, any> & {
   $id?: string;
   $createdAt?: string;
   $updatedAt?: string;
+}
+
+function parseStoredOrderItems(value: unknown): Array<{
+  name: string;
+  quantity: number;
+  price: number;
+  notes?: string;
+}> {
+  if (Array.isArray(value)) return value as Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    notes?: string;
+  }>
+  if (typeof value !== 'string') return []
+
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 const MENU_IMAGE_PLACEHOLDER =
@@ -4387,6 +4411,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [selectedCategory, setSelectedCategory] = useState('All')
   const [failedItemImages, setFailedItemImages] = useState<Record<string, boolean>>({})
   const [expandedDishId, setExpandedDishId] = useState<string | null>(null)
+  const [diningMode, setDiningMode] = useState<'alone' | 'group'>('group')
   const navigate = useNavigate()
   const queryTableNumber = new URLSearchParams(location.search).get('table')
   const rawTableNumber = pathTableNumber || queryTableNumber
@@ -4631,6 +4656,51 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         price: Number.parseFloat(entry.item.price) || 0,
         notes: entry.notes || '',
       }))
+      const orderStatus = diningMode === 'alone' ? 'sent_to_kitchen' : 'pending_buffer'
+      const batchExpiresAt = new Date(Date.now() + 7 * 60 * 1000).toISOString()
+      let existingBuffer: AppwriteDocument | undefined
+
+      if (diningMode === 'group') {
+        const bufferCutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString()
+        const bufferResponse = await databases.listDocuments(
+          databaseId,
+          ordersCollectionId,
+          [
+            Query.equal('restaurant_id', String(restaurantId)),
+            Query.equal('table_number', String(tableNumber)),
+            Query.equal('status', 'pending_buffer'),
+            Query.greaterThan('$createdAt', bufferCutoff),
+            Query.orderDesc('$createdAt'),
+            Query.limit(1),
+          ]
+        )
+        existingBuffer = bufferResponse.documents[0] as AppwriteDocument | undefined
+      }
+
+      const mergedItems = existingBuffer
+        ? [
+            ...parseStoredOrderItems(existingBuffer.items),
+            ...items,
+          ].reduce<Array<{ name: string; quantity: number; price: number; notes?: string }>>(
+            (merged, item) => {
+              const existing = merged.find(
+                candidate => candidate.name === item.name && candidate.price === item.price
+              )
+              if (existing) {
+                existing.quantity += item.quantity
+                existing.notes = [existing.notes, item.notes].filter(Boolean).join('; ')
+              } else {
+                merged.push({ ...item })
+              }
+              return merged
+            },
+            []
+          )
+        : items
+      const mergedTotal = mergedItems.reduce(
+        (total, item) => total + item.price * item.quantity,
+        0
+      )
       const latestOrders = await databases.listDocuments(
         databaseId,
         ordersCollectionId,
@@ -4646,36 +4716,57 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         10
       )
       const orderNumber = String(
-        Number.isFinite(latestOrderNumber) ? latestOrderNumber + 1 : 1
+        existingBuffer?.order_number ||
+        (Number.isFinite(latestOrderNumber) ? latestOrderNumber + 1 : 1)
       )
       const submittedOrder: CompletedOrder = {
         order_number: orderNumber,
         restaurant_id: restaurantId,
         table_number: hasTableContext ? tableNumber : '',
-        items,
-        total_price: cartTotal,
-        status: 'Sent to Kitchen',
+        items: mergedItems,
+        total_price: mergedTotal,
+        status: orderStatus,
         notes: orderNotes.trim(),
+        dining_mode: diningMode,
+        batch_expires_at: diningMode === 'group'
+          ? (existingBuffer?.batch_expires_at as string | undefined) || batchExpiresAt
+          : undefined,
       }
-      await databases.createDocument(
-        databaseId,
-        ordersCollectionId,
-        ID.unique(),
-        {
-          order_number: String(submittedOrder.order_number),
-          restaurant_id: String(submittedOrder.restaurant_id),
-          table_number: String(submittedOrder.table_number),
-          items: JSON.stringify(submittedOrder.items),
-          total_price: String(submittedOrder.total_price),
-          status: 'Sent to Kitchen',
-          notes: String(submittedOrder.notes || ''),
-        }
-      )
+      const orderPayload = {
+        order_number: String(submittedOrder.order_number),
+        restaurant_id: String(submittedOrder.restaurant_id),
+        table_number: String(submittedOrder.table_number),
+        items: JSON.stringify(submittedOrder.items),
+        total_price: String(submittedOrder.total_price),
+        status: submittedOrder.status,
+        notes: String(submittedOrder.notes || ''),
+        dining_mode: submittedOrder.dining_mode,
+        batch_expires_at: String(submittedOrder.batch_expires_at || ''),
+      }
+      if (existingBuffer?.$id) {
+        await databases.updateDocument(
+          databaseId,
+          ordersCollectionId,
+          existingBuffer.$id,
+          orderPayload
+        )
+      } else {
+        await databases.createDocument(
+          databaseId,
+          ordersCollectionId,
+          ID.unique(),
+          orderPayload
+        )
+      }
 
       setCart([])
       setOrderNotes('')
       setIsOrderOpen(false)
-      setOrderConfirmation(`Order Sent to Kitchen! Your order for ${tableNumber} has been placed.`)
+      setOrderConfirmation(
+        diningMode === 'alone'
+          ? `Order sent to kitchen! Your order for ${tableNumber} has been placed.`
+          : `Order added to the group buffer for ${tableNumber}. It will be sent to the kitchen in 7 minutes.`
+      )
       setCompletedOrder(submittedOrder)
     } catch (err) {
       console.error('Failed to submit dine-in order to Appwrite', err)
@@ -5261,6 +5352,40 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                 />
               </div>
+              {hasTableContext && (
+                <div className="space-y-2">
+                  <Label>Dining mode</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        diningMode === 'group'
+                          ? 'border-black bg-gray-900 text-white'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}
+                      onClick={() => setDiningMode('group')}
+                    >
+                      With friends
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md border px-3 py-2 text-sm ${
+                        diningMode === 'alone'
+                          ? 'border-black bg-gray-900 text-white'
+                          : 'border-gray-200 bg-white text-gray-700'
+                      }`}
+                      onClick={() => setDiningMode('alone')}
+                    >
+                      Dining alone
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    {diningMode === 'group'
+                      ? 'Orders from this table are grouped for up to 7 minutes.'
+                      : 'Your order is sent to the kitchen immediately.'}
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t pt-4 font-semibold">
                 <span>Total</span>
                 <span>${cartTotal.toFixed(2)}</span>

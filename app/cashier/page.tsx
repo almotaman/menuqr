@@ -22,6 +22,8 @@ type OrderDocument = {
   items?: string | OrderItem[] | null
   total_price?: number | string | null
   status?: string | null
+  batch_expires_at?: string | null
+  dining_mode?: 'alone' | 'group' | string | null
 }
 
 function getOrderNumber(order: OrderDocument) {
@@ -74,8 +76,10 @@ function orderTotal(order: OrderDocument) {
 }
 
 function isActiveOrderStatus(status: OrderDocument['status']) {
-  return status === 'pending' ||
+  return status === 'pending_buffer' ||
+    status === 'pending' ||
     status === 'processing' ||
+    status === 'sent_to_kitchen' ||
     status === 'Sent to Kitchen'
 }
 
@@ -89,6 +93,33 @@ export default function CashierPage() {
   const [error, setError] = useState<string | null>(null)
   const [audioEnabled, setAudioEnabled] = useState(false)
   const handledRealtimeOrderIds = useRef<Set<string>>(new Set())
+  const promotingBufferIds = useRef<Set<string>>(new Set())
+  const [now, setNow] = useState(() => Date.now())
+
+  const promoteBufferOrder = async (order: OrderDocument) => {
+    if (!order.$id || promotingBufferIds.current.has(order.$id)) return
+    promotingBufferIds.current.add(order.$id)
+
+    try {
+      const { databaseId, ordersCollectionId } = getAppwriteConfig()
+      const promotedOrder = await databases.updateDocument(
+        databaseId,
+        ordersCollectionId,
+        order.$id,
+        { status: 'sent_to_kitchen' }
+      ) as unknown as OrderDocument
+      setOrders(current => [
+        promotedOrder,
+        ...current.filter(existing => existing.$id !== promotedOrder.$id),
+      ])
+      setPrintOrder(promotedOrder)
+      playSound()
+    } catch (promotionError) {
+      console.error('Failed to send buffered order to kitchen', promotionError)
+    } finally {
+      promotingBufferIds.current.delete(order.$id)
+    }
+  }
 
   useEffect(() => {
     if (!printOrder) return
@@ -99,6 +130,11 @@ export default function CashierPage() {
 
     return () => window.clearTimeout(printTimer)
   }, [printOrder])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const activeOrders = useMemo(
     () => orders.filter(order => isActiveOrderStatus(order.status)),
@@ -175,7 +211,13 @@ export default function CashierPage() {
           ordersCollectionId,
           [
             Query.equal('restaurant_id', currentRestaurantId),
-            Query.equal('status', ['pending', 'processing', 'Sent to Kitchen']),
+            Query.equal('status', [
+              'pending_buffer',
+              'pending',
+              'processing',
+              'sent_to_kitchen',
+              'Sent to Kitchen',
+            ]),
             Query.orderDesc('$createdAt'),
           ]
         )
@@ -187,6 +229,8 @@ export default function CashierPage() {
             )
           )
         }
+
+
 
         if (cancelled) return
 
@@ -224,11 +268,30 @@ export default function CashierPage() {
               completeOrder,
               ...current.filter(existing => existing.$id !== completeOrder.$id),
             ])
-            setPrintOrder(completeOrder)
-            playSound()
+            if (completeOrder.status !== 'pending_buffer') {
+              setPrintOrder(completeOrder)
+              playSound()
+            }
           }
         )
         unsubscribe = stopSubscription
+        const bufferTimer = window.setInterval(() => {
+          setOrders(current => {
+            current
+              .filter(order =>
+                order.status === 'pending_buffer' &&
+                order.batch_expires_at &&
+                new Date(order.batch_expires_at).getTime() <= Date.now()
+              )
+              .forEach(order => void promoteBufferOrder(order))
+            return current
+          })
+        }, 1000)
+        const originalUnsubscribe = unsubscribe
+        unsubscribe = () => {
+          originalUnsubscribe?.()
+          window.clearInterval(bufferTimer)
+        }
       } catch (loadError) {
         if (!cancelled) {
           setWorkspaceStatus('invalid')
@@ -325,6 +388,28 @@ export default function CashierPage() {
                       {order.status || 'pending'}
                     </span>
                   </div>
+                  {order.status === 'pending_buffer' && order.batch_expires_at && (
+                    <div className="mb-4 flex items-center justify-between rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-sm text-blue-200">
+                      <span>
+                        Group buffer: {Math.max(
+                          0,
+                          Math.ceil((new Date(order.batch_expires_at).getTime() - now) / 1000)
+                        )}s
+                      </span>
+                      <button
+                        type="button"
+                        className="no-print rounded-md bg-blue-300 px-2 py-1 text-xs font-semibold text-slate-950 hover:bg-blue-200"
+                        onClick={() => void promoteBufferOrder(order)}
+                      >
+                        Send to Kitchen
+                      </button>
+                    </div>
+                  )}
+                  {order.dining_mode === 'alone' && (
+                    <div className="mb-4 text-xs uppercase tracking-wider text-slate-400">
+                      Dining alone
+                    </div>
+                  )}
                   <div className="space-y-2 border-y border-slate-800 py-4">
                     {parseOrderItems(order.items).map((item, index) => (
                       <div key={`${order.$id}-${item.name}-${index}`} className="flex justify-between gap-3">
