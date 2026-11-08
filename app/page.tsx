@@ -20,7 +20,13 @@ import { ChevronDown, Menu, Plus, Minus, Trash2, Loader2, QrCode, Settings, User
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { databases, getAppwriteConfig, getDirectAppwriteUrl } from '@/lib/appwrite'
+import {
+  calculateDistanceInKm,
+  databases,
+  extractLatLngFromGoogleMapsUrl,
+  getAppwriteConfig,
+  getDirectAppwriteUrl,
+} from '@/lib/appwrite'
 import { ID, Query } from 'appwrite'
 
 // Register Chart.js components
@@ -4487,6 +4493,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         const restaurantName = String(
           restaurant.name || restaurant.subdomain || 'Restaurant'
         )
+        const googleMapsLink = typeof restaurant.google_maps_link === 'string'
+          ? restaurant.google_maps_link.trim()
+          : ''
         const logoUrl = LOGOS_BUCKET_ID
           ? getDirectAppwriteUrl(
               LOGOS_BUCKET_ID,
@@ -4499,6 +4508,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         setMenuData({
           restaurantName,
           logoUrl,
+          googleMapsLink,
           menuName: menuName?.replace(/-/g, ' ') || 'Menu',
           items: menuItems,
         })
@@ -4577,6 +4587,41 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     try {
       if (!restaurantId) {
         throw new Error('Restaurant information is not available. Please reload the menu.')
+      }
+
+      const googleMapsLink = String(menuData?.googleMapsLink || '').trim()
+      if (googleMapsLink) {
+        const restaurantCoordinates = extractLatLngFromGoogleMapsUrl(googleMapsLink)
+        if (!restaurantCoordinates) {
+          throw new Error('Restaurant location is unavailable. Please contact the restaurant.')
+        }
+
+        if (!navigator.geolocation) {
+          throw new Error("You are not at the restaurant. You can't order.")
+        }
+
+        const customerCoordinates = await new Promise<GeolocationCoordinates>(
+          (resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              position => resolve(position.coords),
+              error => reject(error),
+              { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            )
+          }
+        ).catch(() => {
+          throw new Error("You are not at the restaurant. You can't order.")
+        })
+
+        const distanceInKm = calculateDistanceInKm(
+          {
+            lat: customerCoordinates.latitude,
+            lng: customerCoordinates.longitude,
+          },
+          restaurantCoordinates
+        )
+        if (distanceInKm > 1) {
+          throw new Error("You are not at the restaurant. You can't order.")
+        }
       }
 
       const { databaseId, ordersCollectionId } = getAppwriteConfig()

@@ -70,4 +70,32 @@ export function getDirectAppwriteUrl(
   return storage.getFilePreview(bucketId, imageRef);
 }
 
+export function extractLatLngFromGoogleMapsUrl(
+  url: string
+): { lat: number; lng: number } | null {
+  if (!url) return null;
+
+  const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  return match
+    ? { lat: Number.parseFloat(match[1]), lng: Number.parseFloat(match[2]) }
+    : null;
+}
+
+export function calculateDistanceInKm(
+  pointA: { lat: number; lng: number },
+  pointB: { lat: number; lng: number }
+): number {
+  const earthRadiusKm = 6371;
+  const toRadians = (degrees: number) => degrees * (Math.PI / 180);
+  const deltaLat = toRadians(pointB.lat - pointA.lat);
+  const deltaLng = toRadians(pointB.lng - pointA.lng);
+  const latitudeA = toRadians(pointA.lat);
+  const latitudeB = toRadians(pointB.lat);
+  const haversine =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.sin(deltaLng / 2) ** 2 * Math.cos(latitudeA) * Math.cos(latitudeB);
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(haversine));
+}
+
 export { client };
