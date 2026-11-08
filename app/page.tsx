@@ -16,7 +16,7 @@ import { Bar, Pie } from 'react-chartjs-2';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { ChevronDown, Menu, Plus, Minus, Trash2, Loader2, QrCode, Settings, Users, X, Smartphone, Tablet, Monitor, Check, Clock, Eye, RotateCw, LineChart, Languages, FolderTree, Filter, Search, UserRound, UsersRound } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Menu, Plus, Minus, Trash2, Loader2, QrCode, Settings, Users, X, Smartphone, Tablet, Monitor, Check, Clock, Eye, RotateCw, LineChart, Languages, FolderTree, Filter, Search, UserRound, UsersRound } from 'lucide-react'
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -4999,10 +4999,6 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   }
 
   const openItemDetail = (item: MenuItem) => {
-    if (!item.variants?.length && !item.add_ons?.length) {
-      addToCart(item)
-      return
-    }
     setDetailItem(item)
     setDetailVariant(item.variants?.[0])
     setDetailAddOns([])
@@ -5116,6 +5112,154 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           isOpen={isPrivacyOpen} 
           onClose={() => setIsPrivacyOpen(false)} 
         />
+      </AnimatedPage>
+    )
+  }
+
+  if (detailItem) {
+    const detailImageUrl = getDirectAppwriteUrl(DISHES_BUCKET_ID, detailItem.image_url)
+
+    return (
+      <AnimatedPage>
+        <div className="min-h-screen bg-white">
+          <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:py-8">
+            <button
+              type="button"
+              onClick={() => setDetailItem(null)}
+              className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Menu
+            </button>
+
+            <div className="space-y-5">
+              {detailImageUrl && (
+                <img
+                  src={detailImageUrl}
+                  alt={detailItem.name}
+                  loading="lazy"
+                  className="max-h-64 w-full rounded-2xl object-cover"
+                />
+              )}
+              <header>
+                <h1 className="text-2xl font-bold text-gray-900">{detailItem.name}</h1>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  {detailItem.description || 'Customize your order.'}
+                </p>
+                <p className="mt-3 text-lg font-bold text-gray-900">
+                  {detailUnitPrice.toFixed(2)} EGP
+                </p>
+              </header>
+
+              {detailItem.variants?.length ? (
+                <section className="space-y-3">
+                  <h2 className="text-base font-semibold">Choose Size / Type</h2>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {detailItem.variants.map(variant => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        onClick={() => setDetailVariant(variant)}
+                        className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                          detailVariant?.id === variant.id
+                            ? 'border-black bg-gray-100'
+                            : 'border-gray-200 hover:border-gray-400'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{variant.name}</span>
+                        <span className="mt-1 block text-xs text-gray-500">
+                          {variant.price ? `+${variant.price.toFixed(2)} EGP` : 'Included'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {detailItem.add_ons?.length ? (
+                <section className="space-y-3">
+                  <h2 className="text-base font-semibold">Add-ons &amp; Extras</h2>
+                  <div className="space-y-2">
+                    {detailItem.add_ons.map(addOn => {
+                      const checked = detailAddOns.some(selected => selected.id === addOn.id)
+                      return (
+                        <label
+                          key={addOn.id}
+                          className={`flex cursor-pointer items-center justify-between rounded-xl border px-3 py-3 ${
+                            checked ? 'border-black bg-gray-50' : 'border-gray-200'
+                          }`}
+                        >
+                          <span className="text-sm">
+                            {addOn.name}
+                            <span className="ml-1 text-xs text-gray-500">
+                              +{addOn.price.toFixed(2)} EGP
+                            </span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setDetailAddOns(current =>
+                                checked
+                                  ? current.filter(selected => selected.id !== addOn.id)
+                                  : [...current, addOn]
+                              )
+                            }
+                            className="h-4 w-4 accent-black"
+                          />
+                        </label>
+                      )
+                    })}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="space-y-2">
+                <label htmlFor="detail-notes" className="text-base font-semibold">
+                  Special instructions
+                </label>
+                <Textarea
+                  id="detail-notes"
+                  value={detailNotes}
+                  onChange={event => setDetailNotes(event.target.value)}
+                  placeholder="e.g., No onions"
+                  rows={3}
+                />
+              </section>
+
+              <div className="sticky bottom-0 flex items-center gap-3 border-t bg-white py-4">
+                <div className="flex items-center gap-2 rounded-xl border p-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}
+                    aria-label="Decrease quantity"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </Button>
+                  <span className="min-w-6 text-center font-semibold">{detailQuantity}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDetailQuantity(quantity => quantity + 1)}
+                    aria-label="Increase quantity"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  className="flex-1 rounded-xl bg-black text-white"
+                  onClick={addDetailedItemToCart}
+                >
+                  Add to Order • {(detailUnitPrice * detailQuantity).toFixed(2)} EGP
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </AnimatedPage>
     )
   }
@@ -5378,85 +5522,6 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             </>
           )}
         </div>
-
-        <Dialog
-          open={Boolean(detailItem)}
-          onOpenChange={open => {
-            if (!open) setDetailItem(null)
-          }}
-        >
-          <DialogContent className="fixed inset-x-0 bottom-0 z-[9999] flex max-h-[88vh] w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-y-auto rounded-t-2xl bg-white p-0 text-left shadow-2xl sm:inset-x-auto sm:left-[50%] sm:top-[50%] sm:w-[min(520px,90vw)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl">
-            {detailItem && (
-              <>
-                <div className="space-y-3 p-4">
-                  <DialogHeader className="text-left">
-                    <DialogTitle className="text-lg font-bold text-gray-900">{detailItem.name}</DialogTitle>
-                    <DialogDescription className="text-xs">{detailItem.description || 'Customize your order.'}</DialogDescription>
-                  </DialogHeader>
-                  <div className="text-base font-semibold text-gray-800">
-                    Price: {detailUnitPrice.toFixed(2)} EGP
-                  </div>
-                  {detailItem.variants?.length ? (
-                    <div className="space-y-2">
-                      <Label className="text-sm">Choose Size / Type</Label>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {detailItem.variants.map(variant => (
-                          <button
-                            key={variant.id}
-                            type="button"
-                            onClick={() => setDetailVariant(variant)}
-                            className={`rounded-lg border px-3 py-2 text-left text-sm ${detailVariant?.id === variant.id ? 'border-black bg-gray-100' : 'border-gray-200'}`}
-                          >
-                            <span className="font-medium">{variant.name}</span>
-                            <span className="mt-1 block text-xs text-gray-500">
-                              {variant.price ? `+${variant.price.toFixed(2)} EGP` : 'Included'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {detailItem.add_ons?.length ? (
-                    <div className="space-y-2">
-                      <Label className="text-sm">Add-ons &amp; Extras</Label>
-                      {detailItem.add_ons.map(addOn => {
-                        const checked = detailAddOns.some(selected => selected.id === addOn.id)
-                        return (
-                          <label key={addOn.id} className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors ${checked ? 'border-black bg-gray-50' : 'border-gray-200'}`}>
-                            <span>{addOn.name} <span className="text-xs text-gray-500">+{addOn.price.toFixed(2)} EGP</span></span>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => setDetailAddOns(current => checked ? current.filter(selected => selected.id !== addOn.id) : [...current, addOn])}
-                              className="h-4 w-4 accent-black"
-                            />
-                          </label>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                  <Textarea
-                    value={detailNotes}
-                    onChange={event => setDetailNotes(event.target.value)}
-                    placeholder="e.g., No onions"
-                    rows={2}
-                    className="text-sm"
-                  />
-                  <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-2 border-t bg-white p-3">
-                    <div className="flex items-center gap-3 rounded-xl border p-1">
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}><Minus className="h-4 w-4" /></Button>
-                      <span className="min-w-5 text-center font-semibold">{detailQuantity}</span>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setDetailQuantity(quantity => quantity + 1)}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                    <Button type="button" className="flex-1 rounded-xl bg-black text-white" onClick={addDetailedItemToCart}>
-                      Add to Order • {(detailUnitPrice * detailQuantity).toFixed(2)} EGP
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </DialogContent>
-        </Dialog>
 
         {cart.length > 0 && (
           <div className="sticky bottom-4 z-20 mx-auto flex w-full max-w-3xl items-center justify-between gap-4 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-xl">
