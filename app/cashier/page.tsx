@@ -471,10 +471,12 @@ export default function CashierPage() {
             {parseOrderItems(printOrder.items).map((item, index) => (
               <div key={`${printOrder.$id}-kitchen-${index}`} className="receipt-line receipt-item">
                 <div>
-                  <strong>{item.quantity}x {item.name}</strong>
-                  {item.variantName && <div>Variant: {item.variantName}</div>}
+                  <strong>
+                    {item.quantity}x {item.name}
+                    {item.variantName ? ` (${item.variantName})` : ''}
+                  </strong>
                   {item.addOns?.map((addOn, addOnIndex) => (
-                    <div key={`${item.name}-kitchen-addon-${addOnIndex}`}>Add-on: {addOn.name}</div>
+                    <div key={`${item.name}-kitchen-addon-${addOnIndex}`}>+ {addOn.name}</div>
                   ))}
                   {item.notes?.trim() && <div>Note: {item.notes}</div>}
                 </div>
@@ -493,10 +495,12 @@ export default function CashierPage() {
             {parseOrderItems(printOrder.items).map((item, index) => (
               <div key={`${printOrder.$id}-customer-${index}`} className="receipt-line">
                 <div>
-                  <div>{item.quantity}x {item.name}</div>
-                  {item.variantName && <div>Variant: {item.variantName}</div>}
+                  <div>
+                    {item.quantity}x {item.name}
+                    {item.variantName ? ` (${item.variantName})` : ''}
+                  </div>
                   {item.addOns?.map((addOn, addOnIndex) => (
-                    <div key={`${item.name}-customer-addon-${addOnIndex}`}>Add-on: {addOn.name}</div>
+                    <div key={`${item.name}-customer-addon-${addOnIndex}`}>+ {addOn.name}</div>
                   ))}
                   {item.notes?.trim() && <div>Note: {item.notes}</div>}
                 </div>

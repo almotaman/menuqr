@@ -4415,7 +4415,7 @@ function normalizeAppwriteMenu(document: AppwriteDocument): Menu | null {
                 : undefined,
             price: String(item.price ?? ''),
             image_url: item.image_url || undefined,
-            variants: normalizeItemVariants(item.variants),
+            variants: normalizeItemVariants(item.variants ?? item.Variants),
             add_ons: normalizeItemAddOns(item.add_ons),
             ingredients: Array.isArray(item.ingredients) ? item.ingredients : undefined,
             allergens: Array.isArray(item.allergens) ? item.allergens : undefined,
@@ -5166,7 +5166,16 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                             : 'border-gray-200 hover:border-gray-400'
                         }`}
                       >
-                        <span className="block text-sm font-semibold">{variant.name}</span>
+                        <span className="flex items-center gap-2 text-sm font-semibold">
+                          <input
+                            type="radio"
+                            name={`variant-${detailItem.id}`}
+                            checked={detailVariant?.id === variant.id}
+                            onChange={() => setDetailVariant(variant)}
+                            className="h-4 w-4 accent-black"
+                          />
+                          {variant.name}
+                        </span>
                         <span className="mt-1 block text-xs text-gray-500">
                           {variant.price ? `+${variant.price.toFixed(2)} EGP` : 'Included'}
                         </span>
