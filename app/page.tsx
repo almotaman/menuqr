@@ -4341,6 +4341,14 @@ function getMenuItemStartingPrice(item: MenuItem): number {
   return Number.parseFloat(item.price) || 0
 }
 
+function normalizeBrandColor(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const color = value.trim()
+  return /^(#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|[a-z]+)$/i.test(color)
+    ? color
+    : fallback
+}
+
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
 const DISHES_BUCKET_ID =
@@ -4704,6 +4712,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           restaurantName,
           logoUrl,
           googleMapsLink,
+          primaryColor: normalizeBrandColor(restaurant.primary_color, '#000000'),
+          secondaryColor: normalizeBrandColor(restaurant.secondary_color, '#ffffff'),
+          backgroundColor: normalizeBrandColor(restaurant.background_color, '#ffffff'),
           menuName: menuName?.replace(/-/g, ' ') || 'Menu',
           items: menuItems,
         })
@@ -5056,6 +5067,11 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     ? (detailVariant ? detailVariant.price : Number.parseFloat(detailItem.price) || 0) +
       detailAddOns.reduce((total, addOn) => total + addOn.price, 0)
     : 0
+  const brandStyle = {
+    '--primary-color': menuData?.primaryColor || '#000000',
+    '--secondary-color': menuData?.secondaryColor || '#ffffff',
+    '--bg-color': menuData?.backgroundColor || '#ffffff',
+  } as React.CSSProperties
 
   if (loading) {
     return (
@@ -5076,7 +5092,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   if (isDiningModeOnboarding && menuData && hasTableContext) {
     return (
       <AnimatedPage>
-        <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-white to-gray-50 px-4 py-8">
+        <main
+          className="flex min-h-screen items-center justify-center px-4 py-8"
+          style={{ ...brandStyle, backgroundColor: 'var(--bg-color)' }}
+        >
           <div className="mx-auto w-full max-w-lg text-center">
             {menuData.logoUrl ? (
               <img
@@ -5090,7 +5109,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 {menuData.restaurantName?.[0]?.toUpperCase() || 'R'}
               </div>
             )}
-            <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-gray-500">
+            <p
+              className="mb-2 text-sm font-semibold uppercase tracking-widest"
+              style={{ color: 'var(--primary-color)' }}
+            >
               {tableNumber}
             </p>
             <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
@@ -5101,7 +5123,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             <div className="mt-8 space-y-4 text-left">
               <button
                 type="button"
-                className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-900 hover:shadow-md"
+                className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:shadow-md"
                 onClick={() => chooseDiningMode('alone')}
               >
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
@@ -5116,7 +5138,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-gray-900 hover:shadow-md"
+                className="flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:shadow-md"
                 onClick={() => chooseDiningMode('group')}
               >
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-900">
@@ -5223,7 +5245,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
     return (
       <AnimatedPage>
-        <div className="min-h-screen bg-white">
+        <div
+          className="min-h-screen"
+          style={{ ...brandStyle, backgroundColor: 'var(--bg-color)' }}
+        >
           <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:py-8">
             <button
               type="button"
@@ -5248,7 +5273,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 <p className="mt-2 text-sm leading-6 text-gray-600">
                   {detailItem.description || 'Customize your order.'}
                 </p>
-                <p className="mt-3 text-lg font-bold text-gray-900">
+                <p className="mt-3 text-lg font-bold" style={{ color: 'var(--primary-color)' }}>
                   {detailUnitPrice.toFixed(2)} EGP
                 </p>
               </header>
@@ -5362,7 +5387,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                 </div>
                 <Button
                   type="button"
-                  className="flex-1 rounded-xl bg-black text-white"
+                  className="flex-1 rounded-xl"
+                  style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
                   onClick={addDetailedItemToCart}
                 >
                   Add to Order • {(detailUnitPrice * detailQuantity).toFixed(2)} EGP
@@ -5377,7 +5403,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
   return (
     <AnimatedPage>
-      <div className="flex min-h-screen flex-col bg-white">
+      <div
+        className="flex min-h-screen flex-col"
+        style={{ ...brandStyle, backgroundColor: 'var(--bg-color)' }}
+      >
         <div className="container mx-auto flex-grow px-0 py-0 sm:px-4 sm:py-8">
           <div className="px-4 py-4 sm:px-0 sm:py-0">
             <div className="mb-1 flex items-center gap-3 sm:mb-2">
@@ -5397,9 +5426,19 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                   {menuData?.restaurantName?.[0]?.toUpperCase() || 'R'}
                 </div>
               )}
-              <h1 className="text-3xl font-bold capitalize">{menuData?.restaurantName}</h1>
+              <h1
+                className="text-3xl font-bold capitalize"
+                style={{ color: 'var(--primary-color)' }}
+              >
+                {menuData?.restaurantName}
+              </h1>
             </div>
-            <h2 className="text-xl text-gray-600 mb-3 sm:mb-6 capitalize">{menuData?.menuName}</h2>
+            <h2
+              className="mb-3 text-xl capitalize sm:mb-6"
+              style={{ color: 'var(--primary-color)' }}
+            >
+              {menuData?.menuName}
+            </h2>
           </div>
           {hasTableContext && (
             <div className="mx-4 mb-6 inline-flex rounded-full bg-green-100 px-4 py-2 text-sm font-semibold text-green-800 sm:mx-0">
@@ -5434,13 +5473,15 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                           event.stopPropagation()
                           openHotspotItem(item)
                         }}
-                        className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-2 border-white bg-black/90 text-base font-bold text-white shadow-xl transition-transform hover:scale-110 active:scale-95 sm:text-lg"
+                        className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-2 border-white text-base font-bold shadow-xl transition-transform hover:scale-110 active:scale-95 sm:text-lg"
                         style={{
                           top: `${hotspot.y}%`,
                           left: `${hotspot.x}%`,
                           width: customWidth,
                           height: customHeight,
                           transform: 'translate(-50%, -50%)',
+                          backgroundColor: 'var(--primary-color)',
+                          color: 'var(--secondary-color)',
                         }}
                       >
                         +
@@ -5461,9 +5502,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                     onClick={() => setSelectedCategory(category)}
                     className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                       selectedCategory === category
-                        ? 'bg-gray-900 text-white'
+                        ? ''
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
+                    style={selectedCategory === category
+                      ? { backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }
+                      : undefined}
                   >
                     {category}
                   </button>
@@ -5579,7 +5623,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                             return (
                               <Button
                                 type="button"
-                                className="rounded-lg bg-black px-2 py-1 text-[11px] font-medium text-white"
+                                className="rounded-lg px-2 py-1 text-[11px] font-medium"
+                                style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
                                 onClick={event => {
                                   event.stopPropagation()
                                   openItemDetail(item)
@@ -5638,7 +5683,10 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         </div>
 
         {cart.length > 0 && (
-          <div className="sticky bottom-4 z-20 mx-auto flex w-full max-w-3xl items-center justify-between gap-4 rounded-xl bg-gray-900 px-4 py-3 text-white shadow-xl">
+          <div
+            className="sticky bottom-4 z-20 mx-auto flex w-full max-w-3xl items-center justify-between gap-4 rounded-xl px-4 py-3 shadow-xl"
+            style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
+          >
             <div>
               <p className="font-semibold">{cartItemCount} item{cartItemCount === 1 ? '' : 's'}</p>
               <p className="text-sm text-gray-300">${cartTotal.toFixed(2)}</p>
@@ -5646,6 +5694,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
             <Button
               type="button"
               variant="secondary"
+              style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
               onClick={() => setIsOrderOpen(true)}
             >
               Review Order
@@ -5734,9 +5783,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       type="button"
                       className={`rounded-md border px-3 py-2 text-sm ${
                         diningMode === 'group'
-                          ? 'border-black bg-gray-900 text-white'
+                          ? 'border-gray-300'
                           : 'border-gray-200 bg-white text-gray-700'
                       }`}
+                      style={diningMode === 'group'
+                        ? { backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }
+                        : undefined}
                       onClick={() => chooseDiningMode('group')}
                     >
                       With friends
@@ -5745,9 +5797,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
                       type="button"
                       className={`rounded-md border px-3 py-2 text-sm ${
                         diningMode === 'alone'
-                          ? 'border-black bg-gray-900 text-white'
+                          ? 'border-gray-300'
                           : 'border-gray-200 bg-white text-gray-700'
                       }`}
+                      style={diningMode === 'alone'
+                        ? { backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }
+                        : undefined}
                       onClick={() => chooseDiningMode('alone')}
                     >
                       Dining alone
@@ -5767,6 +5822,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               <Button
                 type="button"
                 className="w-full"
+                style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
                 disabled={cart.length === 0 || isSubmittingOrder}
                 onClick={hasTableContext ? submitOrder : sendOrderViaWhatsApp}
               >
