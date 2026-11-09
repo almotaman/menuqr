@@ -4978,6 +4978,18 @@ const submitOrder = async () => {
     }
   }
 
+  const downloadReceipt = async () => {
+    try {
+      const receiptElement = document.getElementById('receipt-card')
+      if (!receiptElement) throw new Error('Receipt is not available.')
+      const canvas = await html2canvas(receiptElement, { backgroundColor: '#ffffff', scale: 2 })
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(result => result ? resolve(result) : reject(new Error('Could not create receipt image.')), 'image/png')
+      })
+      const fileName = `receipt-${completedOrder?.order_number || 'order'}.png`
+      const file = new File([blob], fileName, { type: 'image/png' })
+      const shareData = { files: [file], title: 'Order receipt' }
+
       if (
         typeof navigator.share === 'function' &&
         typeof navigator.canShare === 'function' &&
