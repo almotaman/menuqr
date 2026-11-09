@@ -4817,7 +4817,7 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
     )
   }
 
-  const submitOrder = () => {
+ const submitOrder = () => {
     setOrderError(null)
     if (!restaurantId) {
       setOrderError('Restaurant information is not available. Please reload the menu.')
@@ -4864,6 +4864,21 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
         : `Order added to the group buffer for ${tableNumber}. It will be sent to the kitchen in 7 minutes.`
     )
     setIsSubmittingOrder(false)
+
+    // 1. Prepare local storage order details for the independent confirmation page
+    const temporaryOrderId = 'ORD-' + Date.now();
+    const orderData = {
+      orderId: temporaryOrderId,
+      tableNumber: tableNumber || '4',
+      diningMode: selectedDiningMode,
+      items: itemsSnapshot,
+      totalAmount: totalSnapshot,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    localStorage.setItem('last_placed_order', JSON.stringify(orderData));
+
+    // 2. Redirect immediately to the full-screen order confirmation page
+    router.push(`/order-confirmation?orderId=${temporaryOrderId}&table=${tableNumber || '4'}&mode=${selectedDiningMode}`);
 
     void (async () => {
       try {
