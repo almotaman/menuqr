@@ -25,6 +25,8 @@ type OrderDocument = {
   notes?: string | null
   items?: string | OrderItem[] | null
   total_price?: number | string | null
+  totalPrice?: number | string | null
+  amount?: number | string | null
   status?: string | null
   batch_expires_at?: string | null
   dining_mode?: 'alone' | 'group' | string | null
@@ -75,8 +77,15 @@ function parseOrderItems(items: OrderDocument['items']): OrderItem[] {
   }
 }
 
+function getOrderAmount(order: OrderDocument) {
+  const amount = [order.total_price, order.totalPrice, order.amount]
+    .map(value => value === null || value === undefined || value === '' ? NaN : Number(value))
+    .find(Number.isFinite)
+  return amount ?? 0
+}
+
 function orderTotal(order: OrderDocument) {
-  return Number(order.total_price || 0).toFixed(2)
+  return getOrderAmount(order).toFixed(2)
 }
 
 function isActiveOrderStatus(status: OrderDocument['status']) {
@@ -92,7 +101,6 @@ export default function CashierPage() {
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [workspaceStatus, setWorkspaceStatus] = useState<'checking' | 'valid' | 'invalid'>('checking')
   const [orders, setOrders] = useState<OrderDocument[]>([])
-  const [analyticsOrders, setAnalyticsOrders] = useState<OrderDocument[]>([])
   const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'week' | 'custom'>('today')
   const [customStart, setCustomStart] = useState(() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` })
   const [customEnd, setCustomEnd] = useState(() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` })
@@ -165,16 +173,21 @@ export default function CashierPage() {
     }
     start.setHours(0, 0, 0, 0)
     end.setHours(23, 59, 59, 999)
-    return analyticsOrders.filter(order => {
+    return orders.filter(order => {
       const createdAt = order.$createdAt ? new Date(order.$createdAt).getTime() : NaN
       const status = String(order.status || '').toLowerCase()
       return Number.isFinite(createdAt) && createdAt >= start.getTime() && createdAt <= end.getTime() &&
         status !== 'cancelled' && status !== 'canceled'
     })
-  }, [analyticsOrders, datePreset, customStart, customEnd])
+  }, [orders, datePreset, customStart, customEnd])
 
   const totalRevenue = useMemo(
-    () => filteredAnalyticsOrders.reduce((sum, order) => sum + Number(order.total_price || 0), 0),
+    () => filteredAnalyticsOrders.reduce((sum, order) => sum + getOrderAmount(order), 0),
+    [filteredAnalyticsOrders]
+  )
+
+  const totalActiveOrders = useMemo(
+    () => filteredAnalyticsOrders.filter(order => isActiveOrderStatus(order.status)).length,
     [filteredAnalyticsOrders]
   )
 
@@ -186,7 +199,7 @@ export default function CashierPage() {
         const extras = [item.variantName, ...(item.addOns || []).map(addOn => addOn.name)].filter(Boolean)
         return `${item.quantity}x ${item.name}${extras.length ? ` (${extras.join(', ')})` : ''}`
       }).join('; ')
-      return [getOrderNumber(order), order.table_number, order.dining_mode, order.status, order.total_price, summary, order.$createdAt]
+      return [getOrderNumber(order), order.table_number, order.dining_mode, order.status, getOrderAmount(order), summary, order.$createdAt]
     })
     const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(',')).join('\r\n')
     const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' })
@@ -263,34 +276,10 @@ export default function CashierPage() {
           setWorkspaceStatus('valid')
         }
 
-        const response = await databases.listDocuments(
-          databaseId,
-          ordersCollectionId,
-          [
-            Query.equal('restaurant_id', currentRestaurantId),
-            Query.equal('status', [
-              'pending_buffer',
-              'pending',
-              'processing',
-              'sent_to_kitchen',
-              'Sent to Kitchen',
-            ]),
-            Query.orderDesc('$createdAt'),
-          ]
-        )
-
-        if (!cancelled) {
-          setOrders(
-            (response.documents as unknown as OrderDocument[]).filter(
-              order => order.restaurant_id === currentRestaurantId
-            )
-          )
-        }
-
-        const allAnalyticsOrders: OrderDocument[] = []
+        const allOrders: OrderDocument[] = []
         let cursor: string | undefined
         while (!cancelled) {
-          const analyticsResponse = await databases.listDocuments(
+          const ordersResponse = await databases.listDocuments(
             databaseId,
             ordersCollectionId,
             [
@@ -300,13 +289,13 @@ export default function CashierPage() {
               ...(cursor ? [Query.cursorAfter(cursor)] : []),
             ]
           )
-          const page = analyticsResponse.documents as unknown as OrderDocument[]
-          allAnalyticsOrders.push(...page)
+          const page = ordersResponse.documents as unknown as OrderDocument[]
+          allOrders.push(...page)
           if (page.length < 100) break
           cursor = page[page.length - 1]?.$id
           if (!cursor) break
         }
-        if (!cancelled) setAnalyticsOrders(allAnalyticsOrders)
+        if (!cancelled) setOrders(allOrders.filter(order => order.restaurant_id === currentRestaurantId))
 
 
 
@@ -323,8 +312,7 @@ export default function CashierPage() {
             if (
               (!isCreated && !isUpdated) ||
               !order.$id ||
-              order.restaurant_id !== currentRestaurantId ||
-              !isActiveOrderStatus(order.status)
+              order.restaurant_id !== currentRestaurantId
             ) return
 
             if (isCreated) {
@@ -349,8 +337,7 @@ export default function CashierPage() {
               completeOrder,
               ...current.filter(existing => existing.$id !== completeOrder.$id),
             ])
-            setAnalyticsOrders(current => [completeOrder, ...current.filter(existing => existing.$id !== completeOrder.$id)])
-            if (isCreated && completeOrder.status !== 'pending_buffer') {
+            if (isCreated && isActiveOrderStatus(completeOrder.status) && completeOrder.status !== 'pending_buffer') {
               setPrintOrder(completeOrder)
               playSound()
             }
@@ -471,8 +458,13 @@ export default function CashierPage() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">Total Money Ordered</p><p className="mt-1 text-3xl font-bold text-emerald-300">{totalRevenue.toFixed(2)} EGP</p></div>
-              <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">Total Orders Count</p><p className="mt-1 text-3xl font-bold">{filteredAnalyticsOrders.length}</p></div>
+              {isLoading ? <>
+                <div className="animate-pulse rounded-xl bg-slate-950 p-4"><div className="h-4 w-36 rounded bg-slate-800" /><div className="mt-3 h-8 w-32 rounded bg-slate-800" /></div>
+                <div className="animate-pulse rounded-xl bg-slate-950 p-4"><div className="h-4 w-32 rounded bg-slate-800" /><div className="mt-3 h-8 w-16 rounded bg-slate-800" /></div>
+              </> : <>
+                <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">Total Money Ordered</p><p className="mt-1 text-3xl font-bold text-emerald-300">{totalRevenue.toFixed(2)} EGP</p></div>
+                <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">Total Active Orders</p><p className="mt-1 text-3xl font-bold">{totalActiveOrders}</p></div>
+              </>}
             </div>
           </section>
 
