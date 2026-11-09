@@ -4954,11 +4954,12 @@ const submitOrder = async () => {
       // 1. Save order data to local storage for the confirmation page
       const orderData = {
         orderId: createdDocId,
+        orderNumber,
         tableNumber: tableNumber || '4',
         diningMode: selectedDiningMode,
         items: mergedItems,
         totalAmount: mergedTotal,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        timestamp: new Date().toLocaleString()
       }
       localStorage.setItem('last_placed_order', JSON.stringify(orderData))
 
@@ -4968,7 +4969,7 @@ const submitOrder = async () => {
       setIsOrderOpen(false)
       setIsSubmittingOrder(false)
 
-      window.location.href = `/order-confirmation?orderId=${createdDocId}&table=${tableNumber || '4'}&mode=${selectedDiningMode}`
+      window.location.href = `/order-confirmation?orderId=${encodeURIComponent(createdDocId)}&table=${encodeURIComponent(String(tableNumber || '4'))}&mode=${encodeURIComponent(selectedDiningMode)}`
 
     } catch (err) {
       console.error('Failed to submit order:', err)

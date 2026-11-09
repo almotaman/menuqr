@@ -92,6 +92,10 @@ export default function CashierPage() {
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [workspaceStatus, setWorkspaceStatus] = useState<'checking' | 'valid' | 'invalid'>('checking')
   const [orders, setOrders] = useState<OrderDocument[]>([])
+  const [analyticsOrders, setAnalyticsOrders] = useState<OrderDocument[]>([])
+  const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'week' | 'custom'>('today')
+  const [customStart, setCustomStart] = useState(() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` })
+  const [customEnd, setCustomEnd] = useState(() => { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` })
   const [printOrder, setPrintOrder] = useState<OrderDocument | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -144,6 +148,55 @@ export default function CashierPage() {
     () => orders.filter(order => isActiveOrderStatus(order.status)),
     [orders]
   )
+
+  const filteredAnalyticsOrders = useMemo(() => {
+    const start = new Date()
+    const end = new Date()
+    if (datePreset === 'yesterday') {
+      start.setDate(start.getDate() - 1)
+      end.setDate(end.getDate() - 1)
+    } else if (datePreset === 'week') {
+      start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
+    } else if (datePreset === 'custom') {
+      const [startYear, startMonth, startDay] = customStart.split('-').map(Number)
+      const [endYear, endMonth, endDay] = customEnd.split('-').map(Number)
+      start.setFullYear(startYear, startMonth - 1, startDay)
+      end.setFullYear(endYear, endMonth - 1, endDay)
+    }
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+    return analyticsOrders.filter(order => {
+      const createdAt = order.$createdAt ? new Date(order.$createdAt).getTime() : NaN
+      const status = String(order.status || '').toLowerCase()
+      return Number.isFinite(createdAt) && createdAt >= start.getTime() && createdAt <= end.getTime() &&
+        status !== 'cancelled' && status !== 'canceled'
+    })
+  }, [analyticsOrders, datePreset, customStart, customEnd])
+
+  const totalRevenue = useMemo(
+    () => filteredAnalyticsOrders.reduce((sum, order) => sum + Number(order.total_price || 0), 0),
+    [filteredAnalyticsOrders]
+  )
+
+  const exportAnalyticsCsv = () => {
+    const escapeCsv = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`
+    const headers = ['Order Number', 'Table Number', 'Dining Mode', 'Status', 'Total Price', 'Items Summary', 'Created At']
+    const rows = filteredAnalyticsOrders.map(order => {
+      const summary = parseOrderItems(order.items).map(item => {
+        const extras = [item.variantName, ...(item.addOns || []).map(addOn => addOn.name)].filter(Boolean)
+        return `${item.quantity}x ${item.name}${extras.length ? ` (${extras.join(', ')})` : ''}`
+      }).join('; ')
+      return [getOrderNumber(order), order.table_number, order.dining_mode, order.status, order.total_price, summary, order.$createdAt]
+    })
+    const csv = [headers, ...rows].map(row => row.map(escapeCsv).join(',')).join('\r\n')
+    const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `orders_export_${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -234,6 +287,27 @@ export default function CashierPage() {
           )
         }
 
+        const allAnalyticsOrders: OrderDocument[] = []
+        let cursor: string | undefined
+        while (!cancelled) {
+          const analyticsResponse = await databases.listDocuments(
+            databaseId,
+            ordersCollectionId,
+            [
+              Query.equal('restaurant_id', currentRestaurantId),
+              Query.orderDesc('$createdAt'),
+              Query.limit(100),
+              ...(cursor ? [Query.cursorAfter(cursor)] : []),
+            ]
+          )
+          const page = analyticsResponse.documents as unknown as OrderDocument[]
+          allAnalyticsOrders.push(...page)
+          if (page.length < 100) break
+          cursor = page[page.length - 1]?.$id
+          if (!cursor) break
+        }
+        if (!cancelled) setAnalyticsOrders(allAnalyticsOrders)
+
 
 
         if (cancelled) return
@@ -275,6 +349,7 @@ export default function CashierPage() {
               completeOrder,
               ...current.filter(existing => existing.$id !== completeOrder.$id),
             ])
+            setAnalyticsOrders(current => [completeOrder, ...current.filter(existing => existing.$id !== completeOrder.$id)])
             if (isCreated && completeOrder.status !== 'pending_buffer') {
               setPrintOrder(completeOrder)
               playSound()
@@ -374,6 +449,32 @@ export default function CashierPage() {
               </button>
             </div>
           </header>
+
+
+          <section className="no-print mb-7 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-widest text-amber-400">Revenue analytics</p>
+                <h2 className="text-xl font-bold">Orders overview</h2>
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-xs text-slate-400">Date range
+                  <select value={datePreset} onChange={event => setDatePreset(event.target.value as typeof datePreset)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100">
+                    <option value="today">Today</option><option value="yesterday">Yesterday</option><option value="week">This Week</option><option value="custom">Custom Range</option>
+                  </select>
+                </label>
+                {datePreset === 'custom' && <>
+                  <label className="text-xs text-slate-400">From<input type="date" value={customStart} onChange={event => setCustomStart(event.target.value)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100" /></label>
+                  <label className="text-xs text-slate-400">To<input type="date" value={customEnd} onChange={event => setCustomEnd(event.target.value)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100" /></label>
+                </>}
+                <button type="button" onClick={exportAnalyticsCsv} className="rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-bold text-slate-950 hover:bg-amber-300">Export CSV</button>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">Total Money Ordered</p><p className="mt-1 text-3xl font-bold text-emerald-300">{totalRevenue.toFixed(2)} EGP</p></div>
+              <div className="rounded-xl bg-slate-950 p-4"><p className="text-sm text-slate-400">Total Orders Count</p><p className="mt-1 text-3xl font-bold">{filteredAnalyticsOrders.length}</p></div>
+            </div>
+          </section>
 
           {error && <div className="mb-5 rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-red-200">{error}</div>}
           {isLoading && <div className="mb-5 flex items-center gap-2 text-slate-400"><Loader2 className="h-4 w-4 animate-spin" /> Loading orders...</div>}
