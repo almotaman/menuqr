@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Query } from 'appwrite'
 import { Clock3, Loader2, LockKeyhole, RefreshCw } from 'lucide-react'
-import { databases, client, getAppwriteConfig } from '@/lib/appwrite'
+import { databases, client, getAppwriteConfig } from '@/lib/appwrite-client'
 
 type OrderItem = {
   name: string

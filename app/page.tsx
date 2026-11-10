@@ -26,7 +26,7 @@ import {
   extractLatLngFromGoogleMapsUrl,
   getAppwriteConfig,
   getDirectAppwriteUrl,
-} from '@/lib/appwrite'
+} from '@/lib/appwrite-client'
 import { ID, Query } from 'appwrite'
 
 // Register Chart.js components

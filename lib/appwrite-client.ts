@@ -1,0 +1,101 @@
+import { Client, Databases, Storage, Account } from 'appwrite';
+
+const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT;
+const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT;
+const databaseId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID;
+const collectionId = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_ID;
+const restaurantsCollectionId =
+  process.env.NEXT_PUBLIC_APPWRITE_RESTAURANTS_COLLECTION_ID;
+const menuCollectionId =
+  process.env.NEXT_PUBLIC_APPWRITE_MENU_COLLECTION_ID;
+const ordersCollectionId =
+  process.env.NEXT_PUBLIC_APPWRITE_ORDERS_COLLECTION_ID;
+const menuHotspotsCollectionId =
+  process.env.NEXT_PUBLIC_APPWRITE_MENU_HOTSPOTS_COLLECTION_ID;
+
+const client = new Client();
+if (endpoint && projectId) {
+  client.setEndpoint(endpoint).setProject(projectId);
+}
+
+export function getAppwriteConfig() {
+  const resolvedRestaurantsCollectionId =
+    restaurantsCollectionId || collectionId;
+  const resolvedMenuCollectionId = menuCollectionId || collectionId;
+  const resolvedOrdersCollectionId = ordersCollectionId || collectionId;
+
+  if (
+    !endpoint ||
+    !projectId ||
+    !databaseId ||
+    !resolvedRestaurantsCollectionId ||
+    !resolvedMenuCollectionId ||
+    !resolvedOrdersCollectionId
+  ) {
+    throw new Error(
+      'Missing Appwrite configuration. Set NEXT_PUBLIC_APPWRITE_ENDPOINT, ' +
+        'NEXT_PUBLIC_APPWRITE_PROJECT, NEXT_PUBLIC_APPWRITE_DATABASE_ID, ' +
+        'NEXT_PUBLIC_APPWRITE_RESTAURANTS_COLLECTION_ID, and ' +
+        'NEXT_PUBLIC_APPWRITE_MENU_COLLECTION_ID, and ' +
+        'NEXT_PUBLIC_APPWRITE_ORDERS_COLLECTION_ID.'
+    );
+  }
+
+  return {
+    endpoint,
+    projectId,
+    databaseId,
+    restaurantsCollectionId: resolvedRestaurantsCollectionId,
+    menuCollectionId: resolvedMenuCollectionId,
+    ordersCollectionId: resolvedOrdersCollectionId,
+    menuHotspotsCollectionId,
+  };
+}
+
+export const databases = new Databases(client);
+export const storage = new Storage(client);
+export const account = new Account(client);
+
+export function getDirectAppwriteUrl(
+  bucketId: string,
+  imageRef?: string
+): string | null {
+  if (!imageRef || imageRef.trim() === '') return null;
+
+  if (imageRef.startsWith('http://') || imageRef.startsWith('https://')) {
+    return imageRef;
+  }
+
+  // Appwrite SDK v16 returns the preview URL as a string.
+  return storage.getFilePreview(bucketId, imageRef);
+}
+
+export function extractLatLngFromGoogleMapsUrl(
+  url: string
+): { lat: number; lng: number } | null {
+  if (!url) return null;
+
+  const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  return match
+    ? { lat: Number.parseFloat(match[1]), lng: Number.parseFloat(match[2]) }
+    : null;
+}
+
+export function calculateDistanceInKm(
+  pointA: { lat: number; lng: number },
+  pointB: { lat: number; lng: number }
+): number {
+  const earthRadiusKm = 6371;
+  const toRadians = (degrees: number) => degrees * (Math.PI / 180);
+  const deltaLat = toRadians(pointB.lat - pointA.lat);
+  const deltaLng = toRadians(pointB.lng - pointA.lng);
+  const latitudeA = toRadians(pointA.lat);
+  const latitudeB = toRadians(pointB.lat);
+  const haversine =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.sin(deltaLng / 2) ** 2 * Math.cos(latitudeA) * Math.cos(latitudeB);
+
+  return 2 * earthRadiusKm * Math.asin(Math.sqrt(haversine));
+}
+
+export { client };
