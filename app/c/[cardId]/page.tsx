@@ -1,6 +1,4 @@
-import { Query } from 'node-appwrite'
 import { redirect } from 'next/navigation'
-import { databases } from '@/lib/appwrite'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,15 +30,54 @@ export default async function CardRedirectPage({
 
   let card: CardDocument | undefined
   try {
-    const result = await databases.listDocuments(
-      'tablesdb',
-      '6af380dd000646ca1cb8',
-      [Query.equal('card_id', cardId), Query.limit(1)]
-    )
-    card = result.documents[0] as unknown as CardDocument | undefined
+    const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT
+    const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT
+    const apiKey = process.env.APPWRITE_API_KEY
+    if (!endpoint || !projectId || !apiKey) {
+      throw new Error(
+        'Missing Appwrite configuration: NEXT_PUBLIC_APPWRITE_ENDPOINT, ' +
+          'NEXT_PUBLIC_APPWRITE_PROJECT, and APPWRITE_API_KEY are required.'
+      )
+    }
+
+    const queryParams = new URLSearchParams()
+    queryParams.append('queries[]', JSON.stringify({
+      method: 'equal',
+      attribute: 'card_id',
+      values: [cardId],
+    }))
+    queryParams.append('queries[]', JSON.stringify({ method: 'limit', values: [1] }))
+
+    const baseUrl = endpoint.replace(/\/+$/, '')
+    const requestUrl =
+      `${baseUrl}/databases/tablesdb/collections/6af380dd000646ca1cb8/documents?${queryParams}`
+    const response = await fetch(requestUrl, {
+      method: 'GET',
+      headers: {
+        'X-Appwrite-Project': projectId,
+        'X-Appwrite-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      cache: 'no-store',
+    })
+    const result = await response.json() as {
+      documents?: CardDocument[]
+      message?: string
+      code?: number
+      type?: string
+    }
+
+    if (!response.ok) {
+      throw Object.assign(new Error(result.message || `Appwrite returned HTTP ${response.status}`), {
+        code: result.code ?? response.status,
+        response: result,
+      })
+    }
+
+    card = result.documents?.[0]
     console.info('Card redirect lookup completed', {
       cardId,
-      matchCount: result.documents.length,
+      matchCount: result.documents?.length ?? 0,
       isActive: card?.is_active,
       hasTargetUrl: Boolean(card?.target_url),
     })
