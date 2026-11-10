@@ -6,7 +6,6 @@ const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT
 const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT
 const apiKey = process.env.APPWRITE_API_KEY
 const databaseId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID
-const cardsCollectionId = process.env.NEXT_PUBLIC_APPWRITE_CARDS_COLLECTION_ID || 'cards'
 
 const client = new Client()
 if (endpoint) client.setEndpoint(endpoint)
@@ -24,5 +23,5 @@ export function getServerAppwriteConfig() {
     )
   }
 
-  return { databaseId, cardsCollectionId }
+  return { databaseId }
 }

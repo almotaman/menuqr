@@ -31,16 +31,17 @@ export default async function CardRedirectPage({
   const { cardId } = await params
 
   let card: CardDocument | undefined
+  console.info('Resolving QR/NFC card redirect', { cardId })
   try {
-    const { databaseId, cardsCollectionId } = getServerAppwriteConfig()
+    const { databaseId } = getServerAppwriteConfig()
     const result = await databases.listDocuments(
       databaseId,
-      cardsCollectionId,
+      process.env.APPWRITE_CARDS_COLLECTION_ID!,
       [Query.equal('card_id', cardId), Query.limit(1)]
     )
     card = result.documents[0] as unknown as CardDocument | undefined
   } catch (error) {
-    console.error('Could not resolve QR/NFC card redirect', error)
+    console.error('Could not resolve QR/NFC card redirect', { cardId, error })
     return unavailableMessage()
   }
 
