@@ -1,6 +1,6 @@
 import { Query } from 'node-appwrite'
 import { redirect } from 'next/navigation'
-import { databases, getServerAppwriteConfig } from '@/lib/appwrite'
+import { databases } from '@/lib/appwrite'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,15 +32,23 @@ export default async function CardRedirectPage({
 
   let card: CardDocument | undefined
   try {
-    const { databaseId } = getServerAppwriteConfig()
     const result = await databases.listDocuments(
-        databaseId,
-        '6af38dd000646ca1cb8', // Hardcoded collection ID
-        [Query.equal('card_id', cardId), Query.limit(1)]
+      'tablesdb',
+      '6af380dd000646ca1cb8',
+      [Query.equal('card_id', cardId), Query.limit(1)]
     )
     card = result.documents[0] as unknown as CardDocument | undefined
   } catch (error) {
-    console.error('Could not resolve QR/NFC card redirect', { cardId, error })
+    const details = error && typeof error === 'object'
+      ? error as { message?: unknown; code?: unknown; response?: unknown }
+      : undefined
+    console.error('Could not resolve QR/NFC card redirect', {
+      cardId,
+      message: details?.message ?? String(error),
+      code: details?.code,
+      response: details?.response,
+      error,
+    })
     return unavailableMessage()
   }
 
