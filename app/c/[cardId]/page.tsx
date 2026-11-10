@@ -12,32 +12,31 @@ type CardDocument = {
 
 function unavailableMessage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-slate-100">
-      <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
-        <h1 className="text-2xl font-bold">Card unavailable</h1>
-        <p className="mt-3 text-slate-400">
-          This card could not be found or is currently inactive. Please contact the card owner.
-        </p>
-      </div>
-    </main>
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-slate-100">
+        <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
+          <h1 className="text-2xl font-bold">Card unavailable</h1>
+          <p className="mt-3 text-slate-400">
+            This card could not be found or is currently inactive. Please contact the card owner.
+          </p>
+        </div>
+      </main>
   )
 }
 
 export default async function CardRedirectPage({
-  params,
-}: {
+                                                 params,
+                                               }: {
   params: Promise<{ cardId: string }>
 }) {
   const { cardId } = await params
 
   let card: CardDocument | undefined
-  console.info('Resolving QR/NFC card redirect', { cardId })
   try {
     const { databaseId } = getServerAppwriteConfig()
     const result = await databases.listDocuments(
-      databaseId,
-      process.env.APPWRITE_CARDS_COLLECTION_ID!,
-      [Query.equal('card_id', cardId), Query.limit(1)]
+        databaseId,
+        '6af38dd000646ca1cb8', // Hardcoded collection ID
+        [Query.equal('card_id', cardId), Query.limit(1)]
     )
     card = result.documents[0] as unknown as CardDocument | undefined
   } catch (error) {
