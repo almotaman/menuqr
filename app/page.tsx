@@ -4495,6 +4495,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [receiptError, setReceiptError] = useState<string | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [orderNotes, setOrderNotes] = useState('')
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [deliveryAddress, setDeliveryAddress] = useState('')
   const [menuImageSource, setMenuImageSource] = useState<string | null>(null)
   const [menuHotspots, setMenuHotspots] = useState<MenuHotspot[]>([])
   const [isTermsOpen, setIsTermsOpen] = useState(false)
@@ -4514,7 +4517,12 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const navigate = useNavigate()
   const queryTableNumber = new URLSearchParams(location.search).get('table')
   const rawTableNumber = pathTableNumber || queryTableNumber
-  const hasTableContext = Boolean(rawTableNumber?.trim())
+  const hasTableParameter = Boolean(rawTableNumber?.trim())
+  const serviceMode = menuData?.serviceMode || 'both'
+  const hasTableContext = serviceMode !== 'whatsapp_only' && hasTableParameter
+  const isWhatsAppCheckout = serviceMode === 'whatsapp_only' ||
+    (serviceMode === 'both' && !hasTableParameter)
+  const needsTableScan = serviceMode === 'dine_in_only' && !hasTableParameter
   const tableNumber = rawTableNumber?.trim()
     ? rawTableNumber.trim().toLowerCase().startsWith('table')
       ? rawTableNumber.trim()
@@ -4710,6 +4718,9 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
 
         setMenuData({
           restaurantName,
+          serviceMode: ['whatsapp_only', 'dine_in_only', 'both'].includes(restaurant.service_mode) ? restaurant.service_mode : 'both',
+          whatsappNumber: String(restaurant.whatsapp_number || ''),
+          requireAddress: restaurant.require_address !== false,
           logoUrl,
           googleMapsLink,
           primaryColor: normalizeBrandColor(restaurant.primary_color, '#000000'),
@@ -4795,24 +4806,31 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   )
 
   const sendOrderViaWhatsApp = () => {
-    const table = hasTableContext ? tableNumber : 'Not specified'
+    const cleanPhone = String(menuData?.whatsappNumber || '').replace(/\D/g, '')
+    if (!cleanPhone) {
+      setOrderError('WhatsApp ordering is unavailable. Please contact the restaurant to configure its WhatsApp number.')
+      return
+    }
+    if (menuData?.requireAddress !== false && !deliveryAddress.trim()) {
+      setOrderError('Please enter your delivery address.')
+      return
+    }
     const orderLines = cart.map(entry => {
-      const options = [
-        entry.variant ? `Variant: ${entry.variant.name}` : '',
-        entry.addOns?.length ? `Add-ons: ${entry.addOns.map(addOn => addOn.name).join(', ')}` : '',
-      ].filter(Boolean).join(', ')
-      return `${entry.quantity} x ${entry.item.name}${options ? ` (${options})` : ''} - $${(entry.unitPrice * entry.quantity).toFixed(2)}`
+      const variant = entry.variant ? ` (${entry.variant.name})` : ''
+      return `${entry.quantity} x ${entry.item.name}${variant} - $${(entry.unitPrice * entry.quantity).toFixed(2)}`
     })
     const message = [
-      `Order for ${menuData?.restaurantName || 'restaurant'}`,
-      `Table: ${table}`,
+      `Restaurant: ${menuData?.restaurantName || 'Restaurant'}`,
+      `Customer: ${customerName.trim()}${customerPhone.trim() ? ` (${customerPhone.trim()})` : ''}`,
+      deliveryAddress.trim() ? `Delivery Address: ${deliveryAddress.trim()}` : '',
       '',
       ...orderLines,
+      orderNotes.trim() ? `Order Notes: ${orderNotes.trim()}` : '',
       '',
       `Total: $${cartTotal.toFixed(2)}`,
-    ].join('\n')
+    ].filter(line => line !== '').join('\n')
     window.open(
-      `https://wa.me/201130615489?text=${encodeURIComponent(message)}`,
+      `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`,
       '_blank'
     )
   }
@@ -4936,7 +4954,7 @@ const submitOrder = async () => {
         total_price: String(mergedTotal),
         status: selectedDiningMode === 'alone' ? 'sent_to_kitchen' : 'pending_buffer',
         notes: String(notesSnapshot),
-        dining_mode: selectedDiningMode,
+        dining_mode: 'dine_in',
         batch_expires_at: selectedDiningMode === 'group'
           ? (existingBuffer?.batch_expires_at as string | undefined) || batchExpiresAt
           : '',
@@ -5695,10 +5713,17 @@ const submitOrder = async () => {
             <DialogHeader>
               <DialogTitle>Review your order</DialogTitle>
               <DialogDescription>
-                Confirm your table and selected dishes before sending the order.
+                {needsTableScan ? 'Scan the QR code on your table to place an order.' : isWhatsAppCheckout ? 'Enter your contact details to send your order to the restaurant.' : 'Confirm your table and selected dishes before sending the order.'}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
+              {needsTableScan && <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">This restaurant accepts dine-in orders only. Please scan the QR code on your table to place an order.</p>}
+              {isWhatsAppCheckout && <>
+                <div className="space-y-2"><Label htmlFor="customer-name">Customer Name</Label><input id="customer-name" value={customerName} onChange={event => setCustomerName(event.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm" /></div>
+                <div className="space-y-2"><Label htmlFor="customer-phone">Customer Phone</Label><input id="customer-phone" type="tel" value={customerPhone} onChange={event => setCustomerPhone(event.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm" /></div>
+                <div className="space-y-2"><Label htmlFor="delivery-address">Delivery Address{menuData?.requireAddress === false ? ' (Optional)' : ''}</Label><input id="delivery-address" value={deliveryAddress} onChange={event => setDeliveryAddress(event.target.value)} required={menuData?.requireAddress !== false} className="w-full rounded-md border bg-background px-3 py-2 text-sm" /></div>
+                {!String(menuData?.whatsappNumber || '').replace(/\D/g, '') && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">WhatsApp ordering is not configured for this restaurant.</p>}
+              </>}
               {hasTableContext && (
                 <div className="rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
                   {tableNumber} (Dine-In)
@@ -5811,10 +5836,11 @@ const submitOrder = async () => {
                 type="button"
                 className="w-full"
                 style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
-                disabled={cart.length === 0 || isSubmittingOrder}
-                onClick={hasTableContext ? submitOrder : sendOrderViaWhatsApp}
+                disabled={cart.length === 0 || isSubmittingOrder || needsTableScan || (isWhatsAppCheckout && (!String(menuData?.whatsappNumber || '').replace(/\D/g, '') || (menuData?.requireAddress !== false && !deliveryAddress.trim())))}
+                onClick={hasTableContext ? submitOrder : isWhatsAppCheckout ? sendOrderViaWhatsApp : undefined}
               >
-                {hasTableContext
+                {needsTableScan ? 'Scan table QR code'
+                  : hasTableContext
                   ? isSubmittingOrder
                     ? (
                       <>
