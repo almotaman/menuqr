@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Query } from 'appwrite'
 import { Clock3, Loader2, LockKeyhole, RefreshCw } from 'lucide-react'
 import { databases, client, getAppwriteConfig } from '@/lib/appwrite-client'
+import CashierItems from './items'
 
 type OrderItem = {
   name: string
@@ -111,6 +112,7 @@ export default function CashierPage() {
   const handledRealtimeOrderIds = useRef<Set<string>>(new Set())
   const promotingBufferIds = useRef<Set<string>>(new Set())
   const [now, setNow] = useState(() => Date.now())
+  const [dashboardTab, setDashboardTab] = useState<'orders' | 'items'>('orders')
 
   const promoteBufferOrder = async (order: OrderDocument) => {
     if (!order.$id || promotingBufferIds.current.has(order.$id)) return
@@ -437,6 +439,13 @@ export default function CashierPage() {
             </div>
           </header>
 
+          <nav className="no-print mb-6 flex gap-2" aria-label="Cashier views">
+            <button type="button" onClick={() => setDashboardTab('orders')} className={`rounded-lg px-4 py-2 font-semibold ${dashboardTab === 'orders' ? 'bg-amber-400 text-slate-950' : 'border border-slate-700 text-slate-300'}`}>Live Orders</button>
+            <button type="button" onClick={() => setDashboardTab('items')} className={`rounded-lg px-4 py-2 font-semibold ${dashboardTab === 'items' ? 'bg-amber-400 text-slate-950' : 'border border-slate-700 text-slate-300'}`}>Items</button>
+          </nav>
+
+          {dashboardTab === 'items' ? <CashierItems restaurantId={restaurantId} /> : <>
+
 
           <section className="no-print mb-7 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
@@ -547,6 +556,7 @@ export default function CashierPage() {
               ))}
             </div>
           )}
+          </>}
         </div>
       </main>
 
