@@ -25,6 +25,11 @@ type StoredOrder = {
   timestamp?: string
   createdAt?: string
   status?: string
+  pagedAt?: string | null
+}
+
+function normalizeStatus(status?: string | null) {
+  return String(status || '').trim().toLowerCase()
 }
 
 function money(value: number) {
@@ -36,11 +41,15 @@ export default function OrderConfirmationPage() {
   const alertAudioRef = useRef<HTMLAudioElement>(null)
   const alertTimerRef = useRef<number | null>(null)
   const alertActiveRef = useRef(false)
+  const prevStatusRef = useRef<{ orderId: string; status: string; pagedAt: string | null }>({ orderId: '', status: '', pagedAt: null })
+  const statusEventCountRef = useRef(0)
+  const isPagedArmedRef = useRef(false)
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
   const [order, setOrder] = useState<StoredOrder | null>(null)
   const [pagerMessage, setPagerMessage] = useState('')
   const [isPaging, setIsPaging] = useState(false)
   const [orderReady, setOrderReady] = useState(false)
+  const [isPagedArmed, setIsPagedArmed] = useState(false)
 
   const stopReadyAlert = useCallback(() => {
     alertActiveRef.current = false
@@ -114,23 +123,46 @@ export default function OrderConfirmationPage() {
       tableNumber: params.get('table') || stored.tableNumber,
       diningMode: params.get('mode') || stored.diningMode,
     })
+    if (stored.orderId) {
+      prevStatusRef.current = { orderId: params.get('orderId') || stored.orderId, status: normalizeStatus(stored.status), pagedAt: stored.pagedAt || null }
+    }
   }, [])
 
   useEffect(() => {
-    if (!order?.orderId || order.createdAt) return
+    if (!order?.orderId) return
+    let cancelled = false
+    statusEventCountRef.current = 0
+    isPagedArmedRef.current = false
+    setIsPagedArmed(false)
     const { databaseId, ordersCollectionId } = getAppwriteConfig()
     void databases.getDocument(databaseId, ordersCollectionId, order.orderId).then(document => {
-      if (document.$id === order.orderId) setOrder(current => current?.orderId === document.$id ? { ...current, createdAt: document.$createdAt, status: String(document.status || '') } : current)
+      if (cancelled || document.$id !== order.orderId) return
+      if (statusEventCountRef.current === 0 && !isPagedArmedRef.current) {
+        prevStatusRef.current = { orderId: order.orderId!, status: normalizeStatus(String(document.status || '')), pagedAt: document.pagedAt || null }
+      }
+      setOrder(current => current?.orderId === document.$id ? { ...current, createdAt: document.$createdAt, status: String(document.status || ''), pagedAt: document.pagedAt || null } : current)
     }).catch(error => console.error('Unable to load order pager details', error))
-  }, [order?.orderId, order?.createdAt])
+    return () => { cancelled = true }
+  }, [order?.orderId])
 
   useEffect(() => {
     if (!order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
     const { databaseId, ordersCollectionId } = getAppwriteConfig()
     const unsubscribe = client.subscribe(`databases.${databaseId}.collections.${ordersCollectionId}.documents.${order.orderId}`, event => {
       const updated = event.payload as { $id?: string; $createdAt?: string; status?: string; pagedAt?: string | null }
-      if (updated.$id !== order.orderId || !isWithinLast24Hours(updated.$createdAt)) return
-      if (updated.status?.toLowerCase() === 'done' && updated.pagedAt) {
+      const createdAt = updated.$createdAt || order.createdAt
+      if (updated.$id !== order.orderId || !isWithinLast24Hours(createdAt)) return
+      statusEventCountRef.current += 1
+      const currentStatus = normalizeStatus(updated.status)
+      const previous = prevStatusRef.current.orderId === order.orderId ? prevStatusRef.current : { orderId: order.orderId!, status: '', pagedAt: null }
+      prevStatusRef.current = { orderId: order.orderId!, status: currentStatus, pagedAt: updated.pagedAt || null }
+      if (
+        isPagedArmedRef.current &&
+        previous.status !== 'done' &&
+        currentStatus === 'done' &&
+        updated.pagedAt &&
+        previous.pagedAt !== updated.pagedAt
+      ) {
         setOrderReady(true)
         setPagerMessage(`Your order is ready — طلبك جاهز للاستلام (#${order.orderNumber ?? '—'})`)
         startReadyAlert()
@@ -159,9 +191,15 @@ export default function OrderConfirmationPage() {
       }
       const wakeLockNavigator = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<unknown> } }
       if (wakeLockNavigator.wakeLock) wakeLockRef.current = await wakeLockNavigator.wakeLock.request('screen').catch(() => null) as { release: () => Promise<void> } | null
+      const observedEventsAtArm = statusEventCountRef.current
       const response = await fetch(`/api/orders/${encodeURIComponent(order.orderId)}/pager`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'arm' }) })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Unable to arm pager.')
+      if (statusEventCountRef.current === observedEventsAtArm) {
+        prevStatusRef.current = { orderId: order.orderId, status: normalizeStatus(result.order?.status || order.status), pagedAt: result.order?.pagedAt || null }
+      }
+      isPagedArmedRef.current = true
+      setIsPagedArmed(true)
       setPagerMessage(`We’ll alert you when order #${order.orderNumber ?? '—'} is ready.`)
     } catch (error) { setPagerMessage(error instanceof Error ? error.message : 'Unable to arm pager.') }
     finally { setIsPaging(false) }
@@ -239,7 +277,7 @@ export default function OrderConfirmationPage() {
         </section>
 
         <footer className="grid shrink-0 grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2">
-          <button type="button" onClick={() => void armPager()} disabled={isPaging || !order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)} className="min-h-12 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isPaging ? 'Enabling pager…' : 'Page Me When Done'} {order?.orderNumber ? `(#${order.orderNumber})` : ''}</button>
+          <button type="button" onClick={() => void armPager()} disabled={isPaging || isPagedArmed || !order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)} className="min-h-12 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isPaging ? 'Enabling pager…' : isPagedArmed ? 'Pager Armed' : 'Page Me When Done'} {order?.orderNumber ? `(#${order.orderNumber})` : ''}</button>
           {pagerMessage && !orderReady && <p className="col-span-full text-center text-sm text-emerald-700">{pagerMessage}</p>}
           <button type="button" onClick={() => void downloadOrShareReceipt()} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-800"><Share2 className="h-4 w-4" /><Download className="h-4 w-4" />Download / Share Receipt</button>
           <button type="button" onClick={backToMenu} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"><ArrowLeft className="h-4 w-4" />Back to Menu</button>
