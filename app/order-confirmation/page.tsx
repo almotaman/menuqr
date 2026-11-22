@@ -34,7 +34,6 @@ function money(value: number) {
 export default function OrderConfirmationPage() {
   const receiptRef = useRef<HTMLDivElement>(null)
   const alertAudioRef = useRef<HTMLAudioElement>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
   const alertTimerRef = useRef<number | null>(null)
   const alertActiveRef = useRef(false)
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null)
@@ -49,13 +48,11 @@ export default function OrderConfirmationPage() {
     alertTimerRef.current = null
     const audio = alertAudioRef.current
     if (audio) {
+      audio.onended = null
+      audio.onerror = null
       audio.pause()
+      audio.loop = false
       try { audio.currentTime = 0 } catch {}
-    }
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel()
-    if (audioContextRef.current) {
-      void audioContextRef.current.close().catch(() => undefined)
-      audioContextRef.current = null
     }
     if (wakeLockRef.current) {
       void wakeLockRef.current.release().catch(() => undefined)
@@ -63,78 +60,37 @@ export default function OrderConfirmationPage() {
     }
   }, [])
 
-  const playWebAudioChime = useCallback(() => {
-    try {
-      const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      if (!AudioContextConstructor) return
-      const context = audioContextRef.current || new AudioContextConstructor()
-      audioContextRef.current = context
-      void context.resume()
-      ;[740, 988].forEach((frequency, index) => {
-        const startAt = context.currentTime + index * 0.24
-        const oscillator = context.createOscillator()
-        const gain = context.createGain()
-        oscillator.type = 'sine'
-        oscillator.frequency.setValueAtTime(frequency, startAt)
-        gain.gain.setValueAtTime(0.0001, startAt)
-        gain.gain.exponentialRampToValueAtTime(0.16, startAt + 0.025)
-        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.32)
-        oscillator.connect(gain)
-        gain.connect(context.destination)
-        oscillator.start(startAt)
-        oscillator.stop(startAt + 0.34)
-      })
-    } catch (error) {
-      console.warn('Web Audio fallback could not play', error)
-    }
-  }, [])
-
-  const speakReadyAnnouncement = useCallback(() => {
-    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') return false
-    try {
-      window.speechSynthesis.cancel()
-      const english = new SpeechSynthesisUtterance('Your order is ready')
-      english.lang = 'en-US'
-      const arabic = new SpeechSynthesisUtterance('طلبك جاهز للاستلام')
-      arabic.lang = 'ar'
-      english.onend = () => {
-        if (alertActiveRef.current) window.speechSynthesis.speak(arabic)
-      }
-      english.onerror = () => { if (alertActiveRef.current) playWebAudioChime() }
-      arabic.onerror = () => { if (alertActiveRef.current) playWebAudioChime() }
-      window.speechSynthesis.speak(english)
-      return true
-    } catch (error) {
-      console.warn('Speech announcement could not play', error)
-      return false
-    }
-  }, [playWebAudioChime])
-
   const startReadyAlert = useCallback(() => {
     if (alertActiveRef.current) return
+    const audio = alertAudioRef.current
+    if (!audio) return
     alertActiveRef.current = true
-
-    const playCycle = async () => {
+    audio.loop = false
+    audio.volume = 0.65
+    audio.onended = () => {
       if (!alertActiveRef.current) return
-      try { navigator.vibrate?.([180, 100, 180]) } catch {}
-      const audio = alertAudioRef.current
-      let audioPlayed = false
-      if (audio && audio.dataset.unavailable !== 'true') {
-        try {
-          audio.currentTime = 0
-          audio.muted = false
-          await audio.play()
-          audioPlayed = true
-        } catch {
-          audio.dataset.unavailable = 'true'
-        }
-      }
-      const speechPlayed = speakReadyAnnouncement()
-      if (!audioPlayed || !speechPlayed) playWebAudioChime()
-      if (alertActiveRef.current) alertTimerRef.current = window.setTimeout(() => void playCycle(), 20000)
+      alertTimerRef.current = window.setTimeout(() => {
+        if (!alertActiveRef.current) return
+        try { audio.currentTime = 0 } catch {}
+        void audio.play().catch(error => {
+          alertActiveRef.current = false
+          console.warn('Order-ready audio could not replay', error)
+        })
+      }, 15000)
     }
-    void playCycle()
-  }, [playWebAudioChime, speakReadyAnnouncement])
+    audio.onerror = () => {
+      alertActiveRef.current = false
+      console.warn('Order-ready audio file is unavailable.')
+    }
+    try { audio.currentTime = 0 } catch {}
+    void audio.play().catch(error => {
+      alertActiveRef.current = false
+      audio.onended = null
+      audio.pause()
+      audio.loop = false
+      console.warn('Order-ready audio could not play', error)
+    })
+  }, [])
 
   useEffect(() => {
     window.addEventListener('pagehide', stopReadyAlert)
@@ -172,9 +128,9 @@ export default function OrderConfirmationPage() {
     if (!order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
     const { databaseId, ordersCollectionId } = getAppwriteConfig()
     const unsubscribe = client.subscribe(`databases.${databaseId}.collections.${ordersCollectionId}.documents.${order.orderId}`, event => {
-      const updated = event.payload as { $id?: string; $createdAt?: string; pagedAt?: string | null }
+      const updated = event.payload as { $id?: string; $createdAt?: string; status?: string; pagedAt?: string | null }
       if (updated.$id !== order.orderId || !isWithinLast24Hours(updated.$createdAt)) return
-      if (updated.pagedAt) {
+      if (updated.status?.toLowerCase() === 'done' && updated.pagedAt) {
         setOrderReady(true)
         setPagerMessage(`Your order is ready — طلبك جاهز للاستلام (#${order.orderNumber ?? '—'})`)
         startReadyAlert()
@@ -190,20 +146,19 @@ export default function OrderConfirmationPage() {
     }
     setIsPaging(true)
     try {
-      const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-      const audioContext = AudioContextConstructor ? (audioContextRef.current || new AudioContextConstructor()) : null
-      if (audioContext) { audioContextRef.current = audioContext; void audioContext.resume().catch(() => undefined) }
       const alertAudio = alertAudioRef.current
-      const audioUnlock = alertAudio ? (async () => {
+      if (alertAudio) {
         alertAudio.preload = 'auto'
         alertAudio.load()
         alertAudio.muted = true
-        try { await alertAudio.play(); alertAudio.pause(); alertAudio.currentTime = 0; alertAudio.muted = false }
-        catch { alertAudio.muted = false; alertAudio.dataset.unavailable = 'true' }
-      })() : Promise.resolve()
+        void alertAudio.play().then(() => {
+          alertAudio.pause()
+          try { alertAudio.currentTime = 0 } catch {}
+          alertAudio.muted = false
+        }).catch(() => { alertAudio.muted = false })
+      }
       const wakeLockNavigator = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<unknown> } }
       if (wakeLockNavigator.wakeLock) wakeLockRef.current = await wakeLockNavigator.wakeLock.request('screen').catch(() => null) as { release: () => Promise<void> } | null
-      await audioUnlock
       const response = await fetch(`/api/orders/${encodeURIComponent(order.orderId)}/pager`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'arm' }) })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Unable to arm pager.')
