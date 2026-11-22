@@ -93,11 +93,8 @@ function orderTotal(order: OrderDocument) {
 }
 
 function isActiveOrderStatus(status: OrderDocument['status']) {
-  return status === 'pending_buffer' ||
-    status === 'pending' ||
-    status === 'processing' ||
-    status === 'sent_to_kitchen' ||
-    status === 'Sent to Kitchen'
+  const normalizedStatus = String(status || '').trim().toLowerCase()
+  return normalizedStatus !== 'done' && normalizedStatus !== 'cancelled' && normalizedStatus !== 'canceled'
 }
 
 export default function CashierPage() {

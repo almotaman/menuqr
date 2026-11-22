@@ -197,7 +197,7 @@ export default function OrderConfirmationPage() {
   }, [order?.orderId, syncOrder])
 
   useEffect(() => {
-    if (!order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
+    if (!order?.orderId || activeOrderIdRef.current !== order.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
     const { databaseId, ordersCollectionId } = getAppwriteConfig()
     const unsubscribe = client.subscribe(`databases.${databaseId}.collections.${ordersCollectionId}.documents.${order.orderId}`, event => {
       const updated = event.payload as { $id?: string; $createdAt?: string; status?: string; pagedAt?: string | null; pageMeRequested?: boolean }
@@ -221,7 +221,7 @@ export default function OrderConfirmationPage() {
   }, [order?.orderId, order?.createdAt, order?.orderNumber, startReadyAlert])
 
   useEffect(() => {
-    if (!order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
+    if (!order?.orderId || activeOrderIdRef.current !== order.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
     if (!isPagedArmed || !isPagedArmedRef.current || normalizeStatus(order.status) !== 'Done') return
 
     const acknowledgedKey = pagerStorageKey('acknowledged', order.orderId)
@@ -256,15 +256,15 @@ export default function OrderConfirmationPage() {
         alertAudio.preload = 'auto'
         alertAudio.load()
         alertAudio.muted = true
-        void alertAudio.play().then(() => {
-          if (alertActiveRef.current) {
-            alertAudio.muted = false
-            return
-          }
+        try {
+          await alertAudio.play()
           alertAudio.pause()
           try { alertAudio.currentTime = 0 } catch {}
+        } catch {
+          // Keep arming even if the browser cannot unlock audio on this device.
+        } finally {
           alertAudio.muted = false
-        }).catch(() => { alertAudio.muted = false })
+        }
       }
       const wakeLockNavigator = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<unknown> } }
       if (wakeLockNavigator.wakeLock) wakeLockRef.current = await wakeLockNavigator.wakeLock.request('screen').catch(() => null) as { release: () => Promise<void> } | null
