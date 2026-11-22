@@ -2,15 +2,12 @@
 
 import { Client, Databases } from 'node-appwrite'
 
-const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT
-const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT
-const apiKey = process.env.APPWRITE_API_KEY
-const databaseId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID
+const endpoint = process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT?.trim().replace(/\/+$/, '')
+const projectId = process.env.NEXT_PUBLIC_APPWRITE_PROJECT?.trim()
+const apiKey = process.env.APPWRITE_API_KEY?.trim()
+const databaseId = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID?.trim()
 
 const client = new Client()
-if (endpoint) client.setEndpoint(endpoint)
-if (projectId) client.setProject(projectId)
-if (apiKey) client.setKey(apiKey)
 
 export const databases = new Databases(client)
 export { client }
@@ -23,5 +20,17 @@ export function getServerAppwriteConfig() {
     )
   }
 
-  return { databaseId }
+  let parsedEndpoint: URL
+  try {
+    parsedEndpoint = new URL(endpoint)
+  } catch {
+    throw new Error('NEXT_PUBLIC_APPWRITE_ENDPOINT must be a valid absolute URL.')
+  }
+  if (!['http:', 'https:'].includes(parsedEndpoint.protocol) || parsedEndpoint.search || parsedEndpoint.hash) {
+    throw new Error('NEXT_PUBLIC_APPWRITE_ENDPOINT must use HTTP(S) and cannot include a query or fragment.')
+  }
+
+  client.setEndpoint(endpoint).setProject(projectId).setKey(apiKey)
+
+  return { endpoint, projectId, apiKey, databaseId }
 }
