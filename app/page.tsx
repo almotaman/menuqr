@@ -1709,6 +1709,10 @@ function SignUp() {
 
 // Add this interface and mock data near the top with other interfaces/mock data
 interface Restaurant {
+  $id?: string;
+  orderResetIntervalHours?: number | null;
+  lastOrderResetAt?: string | null;
+  currentOrderNumber?: number;
   subdomain: string;
   name: string;
   credentials: {
@@ -2316,6 +2320,14 @@ function DashboardContent() {
     }
     return null
   })
+
+  useEffect(() => {
+    if (!currentRestaurant?.subdomain) return
+    void fetch(`/api/restaurants/settings?subdomain=${encodeURIComponent(currentRestaurant.subdomain)}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(result => { if (result?.restaurant) setOrderResetIntervalHours(Number(result.restaurant.orderResetIntervalHours || 0)) })
+      .catch(error => console.error('Unable to load order reset setting', error))
+  }, [currentRestaurant?.subdomain])
 
   // Use restaurant-specific enabled widgets
   const enabledWidgets = currentRestaurant?.enabledWidgets || []
@@ -3173,6 +3185,9 @@ const getBackgroundColor = (tab: string, settings: BrandingSettings) => {
 function SettingsContent() {
   const [activeTab, setActiveTab] = useState('account')
   const [brandingSubTab, setBrandingSubTab] = useState('identity')
+  const [orderResetIntervalHours, setOrderResetIntervalHours] = useState(0)
+  const [customResetHours, setCustomResetHours] = useState('')
+  const [resetSettingsMessage, setResetSettingsMessage] = useState('')
   const [phone, setPhone] = useState('(555) 555-5555')
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
   const [isDeleteAccountOpen, setIsDeleteAccountOpen] = useState(false)
@@ -3227,6 +3242,17 @@ function SettingsContent() {
   const handleSaveBusinessInfo = () => {
     // Here you would typically send a request to your API to update business info
     console.log('Saving business info:', businessInfo)
+  }
+
+  const saveOrderResetSetting = async (hours: number, resetNow = false) => {
+    if (!currentRestaurant?.subdomain) { setResetSettingsMessage('Choose a restaurant before saving.'); return }
+    try {
+      const response = await fetch('/api/restaurants/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subdomain: currentRestaurant.subdomain, orderResetIntervalHours: hours, resetNow }) })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not save settings.')
+      setOrderResetIntervalHours(Number(result.restaurant.orderResetIntervalHours || 0))
+      setResetSettingsMessage(resetNow ? 'Order counter reset.' : 'Reset interval saved.')
+    } catch (error) { setResetSettingsMessage(error instanceof Error ? error.message : 'Could not save settings.') }
   }
 
   const handleSaveBusinessHours = () => {
@@ -3367,6 +3393,17 @@ function SettingsContent() {
 
         {activeTab === 'business' && (
           <div className="space-y-6">
+            <Card>
+              <CardHeader><CardTitle>Order number reset</CardTitle><CardDescription>Reset numbering automatically when a new order arrives.</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  {[['Never', 0], ['12h', 12], ['24h', 24], ['7d', 168], ['10d', 240]].map(([label, hours]) => <Button key={label} variant={orderResetIntervalHours === hours ? 'default' : 'outline'} onClick={() => setOrderResetIntervalHours(Number(hours))}>{label}</Button>)}
+                </div>
+                <div className="flex items-end gap-3"><div className="space-y-2"><Label htmlFor="custom-reset-hours">Custom hours</Label><Input id="custom-reset-hours" type="number" min="0" step="any" value={customResetHours} onChange={event => setCustomResetHours(event.target.value)} placeholder="e.g. 36" /></div><Button variant="outline" onClick={() => { const value = Number(customResetHours); if (Number.isFinite(value) && value > 0) setOrderResetIntervalHours(value) }}>Use custom</Button></div>
+                <div className="flex flex-wrap gap-3"><Button onClick={() => void saveOrderResetSetting(orderResetIntervalHours)}>Save reset interval</Button><Button variant="outline" onClick={() => void saveOrderResetSetting(orderResetIntervalHours, true)}>Reset Now</Button></div>
+                {resetSettingsMessage && <p role="status" className="text-sm text-gray-600">{resetSettingsMessage}</p>}
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Business Hours</CardTitle>
@@ -4927,24 +4964,14 @@ const submitOrder = async () => {
         0
       )
 
-      const latestOrders = await databases.listDocuments(
-        databaseId,
-        ordersCollectionId,
-        [
-          Query.equal('restaurant_id', String(restaurantId)),
-          Query.orderDesc('$createdAt'),
-          Query.limit(1),
-        ]
-      )
-      const latestOrder = latestOrders.documents[0] as AppwriteDocument | undefined
-      const latestOrderNumber = Number.parseInt(
-        String(latestOrder?.order_number || latestOrder?.orderNumber || '').replace(/\D/g, ''),
-        10
-      )
-      const orderNumber = String(
-        existingBuffer?.order_number ||
-        (Number.isFinite(latestOrderNumber) ? latestOrderNumber + 1 : 1)
-      )
+      let allocatedOrderNumber: number | undefined
+      if (!existingBuffer) {
+        const response = await fetch(`/api/restaurants/${encodeURIComponent(String(restaurantId))}/order-number`, { method: 'POST' })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Unable to allocate order number.')
+        allocatedOrderNumber = Number(result.orderNumber)
+      }
+      const orderNumber = String(existingBuffer?.order_number || allocatedOrderNumber || 1)
 
       const orderPayload = {
         order_number: orderNumber,
@@ -4973,6 +5000,7 @@ const submitOrder = async () => {
       const orderData = {
         orderId: createdDocId,
         orderNumber,
+        createdAt: new Date().toISOString(),
         tableNumber: tableNumber || '4',
         diningMode: selectedDiningMode,
         items: mergedItems,

@@ -5,6 +5,7 @@ import { Query } from 'appwrite'
 import { Clock3, Loader2, LockKeyhole, RefreshCw } from 'lucide-react'
 import { databases, client, getAppwriteConfig } from '@/lib/appwrite-client'
 import CashierItems from './items'
+import { isWithinLast24Hours } from '@/lib/order-guards'
 
 type OrderItem = {
   name: string
@@ -30,6 +31,8 @@ type OrderDocument = {
   amount?: number | string | null
   status?: string | null
   batch_expires_at?: string | null
+  pageMeRequested?: boolean
+  pagedAt?: string | null
   dining_mode?: 'alone' | 'group' | string | null
 }
 
@@ -137,6 +140,18 @@ export default function CashierPage() {
     } finally {
       promotingBufferIds.current.delete(order.$id)
     }
+  }
+
+  const updateOrderStatus = async (order: OrderDocument, status: string) => {
+    if (!order.$id || !isWithinLast24Hours(order.$createdAt)) return
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.$id)}/pager`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not update order status.')
+      setOrders(current => current.map(existing => existing.$id === order.$id ? { ...existing, ...result.order } : existing))
+    } catch (statusError) { console.error('Failed to update order status', statusError); setError(statusError instanceof Error ? statusError.message : 'Could not update order status.') }
   }
 
   useEffect(() => {
@@ -497,6 +512,11 @@ export default function CashierPage() {
                       {order.status || 'pending'}
                     </span>
                   </div>
+                  <label className="mb-4 block text-xs text-slate-400">Order status · {getOrderNumber(order)}
+                    <select value={order.status === 'sent_to_kitchen' || order.status === 'Sent to Kitchen' || order.status === 'pending' ? 'Sent to Kitchen' : order.status === 'Done' ? 'Done' : 'Preparing'} onChange={event => void updateOrderStatus(order, event.target.value)} disabled={!isWithinLast24Hours(order.$createdAt)} className="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 disabled:opacity-50">
+                      <option>Sent to Kitchen</option><option>Preparing</option><option>Done</option>
+                    </select>
+                  </label>
                   {order.status === 'pending_buffer' && order.batch_expires_at && (
                     <div className="mb-4 flex items-center justify-between rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 py-2 text-sm text-blue-200">
                       <span>

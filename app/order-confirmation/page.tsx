@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Download, Share2 } from 'lucide-react'
+import { client, databases, getAppwriteConfig } from '@/lib/appwrite-client'
+import { isWithinLast24Hours } from '@/lib/order-guards'
 
 type ReceiptItem = {
   name: string
@@ -21,6 +23,8 @@ type StoredOrder = {
   items?: ReceiptItem[]
   totalAmount?: number
   timestamp?: string
+  createdAt?: string
+  status?: string
 }
 
 function money(value: number) {
@@ -30,6 +34,9 @@ function money(value: number) {
 export default function OrderConfirmationPage() {
   const receiptRef = useRef<HTMLDivElement>(null)
   const [order, setOrder] = useState<StoredOrder | null>(null)
+  const [pagerMessage, setPagerMessage] = useState('')
+  const [isPaging, setIsPaging] = useState(false)
+  const [orderReady, setOrderReady] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -46,6 +53,57 @@ export default function OrderConfirmationPage() {
       diningMode: params.get('mode') || stored.diningMode,
     })
   }, [])
+
+  useEffect(() => {
+    if (!order?.orderId || order.createdAt) return
+    const { databaseId, ordersCollectionId } = getAppwriteConfig()
+    void databases.getDocument(databaseId, ordersCollectionId, order.orderId).then(document => {
+      if (document.$id === order.orderId) setOrder(current => current?.orderId === document.$id ? { ...current, createdAt: document.$createdAt, status: String(document.status || '') } : current)
+    }).catch(error => console.error('Unable to load order pager details', error))
+  }, [order?.orderId, order?.createdAt])
+
+  useEffect(() => {
+    if (!order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) return
+    const { databaseId, ordersCollectionId } = getAppwriteConfig()
+    const unsubscribe = client.subscribe(`databases.${databaseId}.collections.${ordersCollectionId}.documents.${order.orderId}`, event => {
+      const updated = event.payload as { $id?: string; $createdAt?: string; pagedAt?: string | null }
+      if (updated.$id !== order.orderId || !isWithinLast24Hours(updated.$createdAt)) return
+      if (updated.pagedAt) {
+        setOrderReady(true)
+        setPagerMessage(`Order #${order.orderNumber ?? '—'} is ready!`)
+        try { navigator.vibrate?.([250, 120, 250]) } catch {}
+        const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (AudioContextConstructor) {
+          const context = new AudioContextConstructor()
+          const oscillator = context.createOscillator()
+          oscillator.frequency.value = 880
+          oscillator.connect(context.destination)
+          oscillator.start()
+          oscillator.stop(context.currentTime + 0.45)
+        }
+      }
+    })
+    return () => unsubscribe()
+  }, [order?.orderId, order?.createdAt, order?.orderNumber])
+
+  const armPager = async () => {
+    if (!order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)) {
+      setPagerMessage('Paging is available for orders placed within the last 24 hours.')
+      return
+    }
+    setIsPaging(true)
+    try {
+      const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (AudioContextConstructor) { const context = new AudioContextConstructor(); await context.resume(); await context.close() }
+      const wakeLockNavigator = navigator as Navigator & { wakeLock?: { request: (type: 'screen') => Promise<unknown> } }
+      if (wakeLockNavigator.wakeLock) await wakeLockNavigator.wakeLock.request('screen').catch(() => undefined)
+      const response = await fetch(`/api/orders/${encodeURIComponent(order.orderId)}/pager`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'arm' }) })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Unable to arm pager.')
+      setPagerMessage(`We’ll alert you when order #${order.orderNumber ?? '—'} is ready.`)
+    } catch (error) { setPagerMessage(error instanceof Error ? error.message : 'Unable to arm pager.') }
+    finally { setIsPaging(false) }
+  }
 
   const downloadOrShareReceipt = async () => {
     if (!receiptRef.current) return
@@ -91,6 +149,8 @@ export default function OrderConfirmationPage() {
           <p className="mt-1 text-sm text-emerald-50">Your order has been received by the restaurant.</p>
         </header>
 
+        {orderReady && <div role="alert" className="bg-emerald-100 px-5 py-3 text-center font-bold text-emerald-900">{pagerMessage}</div>}
+
         <section ref={receiptRef} className="min-h-0 flex-1 overflow-y-auto bg-white p-5 sm:p-6">
           <div className="mb-4 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4">
             <div><p className="text-xs uppercase tracking-wide text-slate-500">Order Number</p><p className="mt-1 font-bold">{order?.orderNumber ?? (order?.orderId ? `#${order.orderId.slice(-6)}` : '—')}</p></div>
@@ -116,6 +176,8 @@ export default function OrderConfirmationPage() {
         </section>
 
         <footer className="grid shrink-0 grid-cols-1 gap-3 border-t border-slate-100 p-4 sm:grid-cols-2">
+          <button type="button" onClick={() => void armPager()} disabled={isPaging || !order?.orderId || !order.createdAt || !isWithinLast24Hours(order.createdAt)} className="min-h-12 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{isPaging ? 'Enabling pager…' : 'Page Me When Done'} {order?.orderNumber ? `(#${order.orderNumber})` : ''}</button>
+          {pagerMessage && !orderReady && <p className="col-span-full text-center text-sm text-emerald-700">{pagerMessage}</p>}
           <button type="button" onClick={() => void downloadOrShareReceipt()} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-800"><Share2 className="h-4 w-4" /><Download className="h-4 w-4" />Download / Share Receipt</button>
           <button type="button" onClick={backToMenu} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50"><ArrowLeft className="h-4 w-4" />Back to Menu</button>
         </footer>
