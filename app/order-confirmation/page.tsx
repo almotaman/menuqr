@@ -320,7 +320,19 @@ export default function OrderConfirmationPage() {
   const backToMenu = () => {
     stopReadyAlert()
     localStorage.removeItem('last_placed_order')
-    window.location.href = '/'
+    const params = new URLSearchParams(window.location.search)
+    const restaurantSlug = params.get('restaurantSlug') || window.location.hostname.split('.')[0] || 'restaurant'
+    const table = params.get('table') || params.get('table_number') || params.get('t') ||
+      (order?.tableNumber != null ? String(order.tableNumber) : null) ||
+      (() => { try { return window.sessionStorage.getItem(`3ainly_table_${restaurantSlug}`) } catch { return null } })()
+    const requestedPath = params.get('menuPath')
+    const menuPath = requestedPath?.startsWith('/') && !requestedPath.startsWith('//') ? requestedPath : '/'
+    const menuUrl = new URL(menuPath, window.location.origin)
+    if (table) {
+      menuUrl.searchParams.set('table', table)
+      try { window.sessionStorage.setItem(`3ainly_table_${restaurantSlug}`, table) } catch {}
+    }
+    window.location.href = `${menuUrl.pathname}${menuUrl.search}${menuUrl.hash}`
   }
 
   const dismissReadyAlert = () => {

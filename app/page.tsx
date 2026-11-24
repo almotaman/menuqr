@@ -4552,8 +4552,21 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
   const [customerCoordinates, setCustomerCoordinates] = useState<{ lat: number; lng: number } | null>(null)
   const customerCoordinatesRef = useRef<{ lat: number; lng: number } | null>(null)
   const navigate = useNavigate()
-  const queryTableNumber = new URLSearchParams(location.search).get('table')
-  const rawTableNumber = pathTableNumber || queryTableNumber
+  const queryParams = new URLSearchParams(location.search)
+  const queryTableNumber = queryParams.get('table') ?? queryParams.get('table_number') ?? queryParams.get('t')
+  const restaurantSlug = restaurantSubdomain || menuData?.organizationSubdomain || menuData?.subdomain ||
+    (typeof window !== 'undefined' ? window.location.hostname.split('.')[0] : 'restaurant')
+  const tableStorageKey = `3ainly_table_${restaurantSlug}`
+  let savedTableNumber: string | null = null
+  if (!pathTableNumber && !queryTableNumber && typeof window !== 'undefined') {
+    try { savedTableNumber = window.sessionStorage.getItem(tableStorageKey) } catch {}
+  }
+  const rawTableNumber = pathTableNumber || queryTableNumber || savedTableNumber
+  useEffect(() => {
+    const explicitTable = pathTableNumber || queryTableNumber
+    if (!explicitTable?.trim()) return
+    try { window.sessionStorage.setItem(tableStorageKey, explicitTable.trim()) } catch {}
+  }, [pathTableNumber, queryTableNumber, tableStorageKey])
   const hasTableParameter = Boolean(rawTableNumber?.trim())
   const serviceMode = menuData?.serviceMode || 'both'
   const hasTableContext = serviceMode !== 'whatsapp_only' && hasTableParameter
@@ -5015,7 +5028,14 @@ const submitOrder = async () => {
       setIsOrderOpen(false)
       setIsSubmittingOrder(false)
 
-      window.location.href = `/order-confirmation?orderId=${encodeURIComponent(createdDocId)}&table=${encodeURIComponent(String(tableNumber || '4'))}&mode=${encodeURIComponent(selectedDiningMode)}`
+      const confirmationParams = new URLSearchParams({
+        orderId: createdDocId,
+        table: String(rawTableNumber || tableNumber || '4'),
+        mode: selectedDiningMode,
+        restaurantSlug,
+        menuPath: location.pathname,
+      })
+      window.location.href = `/order-confirmation?${confirmationParams.toString()}`
 
     } catch (err) {
       console.error('Failed to submit order:', err)
@@ -6199,7 +6219,7 @@ export default function App() {
   const restaurantSubdomain = isSubdomain ? hostname.split('.')[0] : null
   const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
   const hasTableQuery = typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).has('table')
+    ['table', 'table_number', 't'].some(key => new URLSearchParams(window.location.search).has(key))
   const isPublicMenuRoute = isSubdomain || pathname.startsWith('/table/') || hasTableQuery
 
   if (!isClient) {
