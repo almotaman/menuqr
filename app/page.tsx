@@ -5117,6 +5117,22 @@ const submitOrder = async () => {
     setDetailItem(null)
   }
 
+  const returnToMenu = () => {
+    const params = new URLSearchParams(location.search)
+    const activeTable = params.get('table') || params.get('table_number') || params.get('t') || rawTableNumber
+    let table = activeTable?.trim() || ''
+    if (!table) {
+      try { table = window.sessionStorage.getItem(tableStorageKey) || '' } catch {}
+    }
+    if (table) {
+      params.set('table', table)
+      try { window.sessionStorage.setItem(tableStorageKey, table) } catch {}
+    }
+    const search = params.toString()
+    navigate(`${location.pathname}${search ? `?${search}` : ''}${location.hash}`, { replace: true })
+    setDetailItem(null)
+  }
+
   const detailUnitPrice = detailItem
     ? (detailVariant ? detailVariant.price : Number.parseFloat(detailItem.price) || 0) +
       detailAddOns.reduce((total, addOn) => total + addOn.price, 0)
@@ -5303,16 +5319,7 @@ const submitOrder = async () => {
           className="min-h-screen"
           style={{ ...brandStyle, backgroundColor: 'var(--bg-color)' }}
         >
-          <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:py-8">
-            <button
-              type="button"
-              onClick={() => setDetailItem(null)}
-              className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Menu
-            </button>
-
+          <div className="mx-auto w-full max-w-3xl px-4 pb-32 pt-4 sm:pt-8 sm:pb-32">
             <div className="space-y-5">
               {detailImageUrl && (
                 <img
@@ -5417,36 +5424,46 @@ const submitOrder = async () => {
                 />
               </section>
 
-              <div className="sticky bottom-0 flex items-center gap-3 border-t bg-white py-4">
-                <div className="flex items-center gap-2 rounded-xl border p-1">
+              <div className="sticky bottom-0 z-30 -mx-4 border-t border-gray-200 bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur sm:mx-0 sm:rounded-xl sm:px-3">
+                <button
+                  type="button"
+                  onClick={returnToMenu}
+                  className="mb-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Menu
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 rounded-xl border p-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-6 text-center font-semibold">{detailQuantity}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDetailQuantity(quantity => quantity + 1)}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDetailQuantity(quantity => Math.max(1, quantity - 1))}
-                    aria-label="Decrease quantity"
+                    className="flex-1 rounded-xl"
+                    style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
+                    onClick={addDetailedItemToCart}
                   >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span className="min-w-6 text-center font-semibold">{detailQuantity}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setDetailQuantity(quantity => quantity + 1)}
-                    aria-label="Increase quantity"
-                  >
-                    <Plus className="h-4 w-4" />
+                    Add to Order • {(detailUnitPrice * detailQuantity).toFixed(2)} EGP
                   </Button>
                 </div>
-                <Button
-                  type="button"
-                  className="flex-1 rounded-xl"
-                  style={{ backgroundColor: 'var(--primary-color)', color: 'var(--secondary-color)' }}
-                  onClick={addDetailedItemToCart}
-                >
-                  Add to Order • {(detailUnitPrice * detailQuantity).toFixed(2)} EGP
-                </Button>
               </div>
             </div>
           </div>
