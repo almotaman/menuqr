@@ -28,6 +28,8 @@ import {
   getDirectAppwriteUrl,
 } from '@/lib/appwrite-client'
 import { ID, Query } from 'appwrite'
+import RestaurantLogoHeader from '@/components/restaurant-logo-header'
+import { resolveRestaurantTheme, type LogoStyle } from '@/lib/restaurant-theme'
 
 // Register Chart.js components
 ChartJS.register(ArcElement, ChartTooltip, Legend, CategoryScale, LinearScale, BarElement);
@@ -4378,14 +4380,6 @@ function getMenuItemStartingPrice(item: MenuItem): number {
   return Number.parseFloat(item.price) || 0
 }
 
-function normalizeBrandColor(value: unknown, fallback: string): string {
-  if (typeof value !== 'string') return fallback
-  const color = value.trim()
-  return /^(#[0-9a-f]{3,8}|rgba?\([^)]*\)|hsla?\([^)]*\)|[a-z]+)$/i.test(color)
-    ? color
-    : fallback
-}
-
 const MENU_IMAGE_PLACEHOLDER =
   'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80'
 const DISHES_BUCKET_ID =
@@ -4763,6 +4757,8 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
               typeof restaurant.logo_url === 'string' ? restaurant.logo_url : undefined
             )
           : null
+        const menuTheme = resolveRestaurantTheme(restaurant, targetSubdomain, 'menu')
+        const productTheme = resolveRestaurantTheme(restaurant, targetSubdomain, 'product')
         console.log('Restaurant logo_url:', restaurant.logo_url)
         console.log('Resolved restaurant logo URL:', logoUrl)
 
@@ -4773,9 +4769,13 @@ function PublicMenuView({ restaurantSubdomain }: { restaurantSubdomain: string |
           requireAddress: restaurant.require_address !== false,
           logoUrl,
           googleMapsLink,
-          primaryColor: normalizeBrandColor(restaurant.primary_color, '#000000'),
-          secondaryColor: normalizeBrandColor(restaurant.secondary_color, '#ffffff'),
-          backgroundColor: normalizeBrandColor(restaurant.background_color, '#ffffff'),
+          primaryColor: menuTheme.primaryColor,
+          secondaryColor: menuTheme.secondaryColor,
+          backgroundColor: menuTheme.backgroundColor,
+          logoStyle: menuTheme.logoStyle as LogoStyle,
+          productTheme,
+          restaurantDocument: restaurant,
+          restaurantSlug: targetSubdomain,
           menuName: menuName?.replace(/-/g, ' ') || 'Menu',
           items: menuItems,
         })
@@ -5018,7 +5018,13 @@ const submitOrder = async () => {
         diningMode: selectedDiningMode,
         items: mergedItems,
         totalAmount: mergedTotal,
-        timestamp: new Date().toLocaleString()
+        timestamp: new Date().toLocaleString(),
+        brand: {
+          restaurantName: menuData?.restaurantName || 'Restaurant',
+          restaurantSlug,
+          logoUrl: menuData?.logoUrl || null,
+          theme: resolveRestaurantTheme(menuData?.restaurantDocument, restaurantSlug, 'receipt'),
+        }
       }
       localStorage.setItem('last_placed_order', JSON.stringify(orderData))
 
@@ -5142,6 +5148,17 @@ const submitOrder = async () => {
     '--secondary-color': menuData?.secondaryColor || '#ffffff',
     '--bg-color': menuData?.backgroundColor || '#ffffff',
   } as React.CSSProperties
+  const productTheme = menuData?.productTheme || {
+    primaryColor: menuData?.primaryColor || '#000000',
+    secondaryColor: menuData?.secondaryColor || '#FFFFFF',
+    backgroundColor: menuData?.backgroundColor || '#FFFFFF',
+    logoStyle: menuData?.logoStyle || 'left-circle',
+  }
+  const productBrandStyle = {
+    '--primary-color': productTheme.primaryColor,
+    '--secondary-color': productTheme.secondaryColor,
+    '--bg-color': productTheme.backgroundColor,
+  } as React.CSSProperties
 
   if (loading) {
     return (
@@ -5234,24 +5251,8 @@ const submitOrder = async () => {
       <AnimatedPage>
         <div className="flex flex-col min-h-screen">
           <div className="container mx-auto px-4 py-8 flex-grow">
-            <div className="mb-2 flex items-center gap-3">
-              {menuData.logoUrl ? (
-                <img
-                  src={menuData.logoUrl}
-                  alt={menuData.restaurantName}
-                  loading="lazy"
-                  className="h-12 w-12 rounded-full object-cover"
-                  onError={event => {
-                    console.error('Restaurant logo load error:', event.currentTarget.src)
-                    event.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 font-bold">
-                  {menuData.restaurantName?.[0]?.toUpperCase() || 'R'}
-                </div>
-              )}
-              <h1 className="text-3xl font-bold capitalize">{menuData.restaurantName}</h1>
+            <div className="mb-2">
+              <RestaurantLogoHeader name={menuData.restaurantName} logoUrl={menuData.logoUrl} logoStyle={menuData.logoStyle} primaryColor={menuData.primaryColor} secondaryColor={menuData.secondaryColor} />
             </div>
             <h2 className="text-xl text-gray-600 mb-6">Available Menus</h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -5317,10 +5318,18 @@ const submitOrder = async () => {
       <AnimatedPage>
         <div
           className="min-h-screen"
-          style={{ ...brandStyle, backgroundColor: 'var(--bg-color)' }}
+          style={{ ...productBrandStyle, backgroundColor: 'var(--bg-color)' }}
         >
           <div className="mx-auto w-full max-w-3xl px-4 pb-32 pt-4 sm:pt-8 sm:pb-32">
             <div className="space-y-5">
+              <RestaurantLogoHeader
+                name={menuData?.restaurantName || 'Restaurant'}
+                logoUrl={menuData?.logoUrl}
+                logoStyle={productTheme.logoStyle}
+                primaryColor={productTheme.primaryColor}
+                secondaryColor={productTheme.secondaryColor}
+                compact
+              />
               {detailImageUrl && (
                 <img
                   src={detailImageUrl}
@@ -5480,29 +5489,8 @@ const submitOrder = async () => {
       >
         <div className="container mx-auto flex-grow px-0 py-0 sm:px-4 sm:py-8">
           <div className="px-4 py-4 sm:px-0 sm:py-0">
-            <div className="mb-1 flex items-center gap-3 sm:mb-2">
-              {menuData?.logoUrl ? (
-                <img
-                  src={menuData.logoUrl}
-                  alt={menuData.restaurantName}
-                  loading="lazy"
-                  className="h-12 w-12 rounded-full object-cover"
-                  onError={event => {
-                    console.error('Restaurant logo load error:', event.currentTarget.src)
-                    event.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 font-bold">
-                  {menuData?.restaurantName?.[0]?.toUpperCase() || 'R'}
-                </div>
-              )}
-              <h1
-                className="text-3xl font-bold capitalize"
-                style={{ color: 'var(--primary-color)' }}
-              >
-                {menuData?.restaurantName}
-              </h1>
+            <div className="mb-1 sm:mb-2">
+              <RestaurantLogoHeader name={menuData?.restaurantName || 'Restaurant'} logoUrl={menuData?.logoUrl} logoStyle={menuData?.logoStyle || 'left-circle'} primaryColor={menuData?.primaryColor || '#000000'} secondaryColor={menuData?.secondaryColor || '#FFFFFF'} />
             </div>
             <h2
               className="mb-3 text-xl capitalize sm:mb-6"

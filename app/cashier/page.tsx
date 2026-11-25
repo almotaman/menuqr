@@ -5,6 +5,7 @@ import { Query } from 'appwrite'
 import { Clock3, Loader2, LockKeyhole, RefreshCw } from 'lucide-react'
 import { databases, client, getAppwriteConfig } from '@/lib/appwrite-client'
 import CashierItems from './items'
+import CashierCustomization from './customization'
 import { isWithinLast24Hours } from '@/lib/order-guards'
 
 type OrderItem = {
@@ -34,6 +35,13 @@ type OrderDocument = {
   pageMeRequested?: boolean
   pagedAt?: string | null
   dining_mode?: 'alone' | 'group' | string | null
+}
+
+type RestaurantProfile = Record<string, unknown> & {
+  $id: string
+  subdomain?: string
+  name?: string
+  logo_url?: string
 }
 
 function getOrderNumber(order: OrderDocument) {
@@ -100,6 +108,7 @@ function isActiveOrderStatus(status: OrderDocument['status']) {
 export default function CashierPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
+  const [restaurantProfile, setRestaurantProfile] = useState<RestaurantProfile | null>(null)
   const [workspaceStatus, setWorkspaceStatus] = useState<'checking' | 'valid' | 'invalid'>('checking')
   const [orders, setOrders] = useState<OrderDocument[]>([])
   const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'week' | 'custom'>('today')
@@ -112,7 +121,7 @@ export default function CashierPage() {
   const handledRealtimeOrderIds = useRef<Set<string>>(new Set())
   const promotingBufferIds = useRef<Set<string>>(new Set())
   const [now, setNow] = useState(() => Date.now())
-  const [dashboardTab, setDashboardTab] = useState<'orders' | 'items'>('orders')
+  const [dashboardTab, setDashboardTab] = useState<'orders' | 'items' | 'customization'>('orders')
 
   const promoteBufferOrder = async (order: OrderDocument) => {
     if (!order.$id || promotingBufferIds.current.has(order.$id)) return
@@ -277,7 +286,7 @@ export default function CashierPage() {
           restaurantsCollectionId,
           [Query.equal('subdomain', targetSubdomain)]
         )
-        const restaurant = restaurantResponse.documents[0] as { $id?: string } | undefined
+        const restaurant = restaurantResponse.documents[0] as RestaurantProfile | undefined
         const currentRestaurantId = restaurant?.$id
 
         if (!currentRestaurantId) {
@@ -287,6 +296,7 @@ export default function CashierPage() {
 
         if (!cancelled) {
           setRestaurantId(currentRestaurantId)
+          setRestaurantProfile(restaurant || null)
           setWorkspaceStatus('valid')
         }
 
@@ -454,9 +464,10 @@ export default function CashierPage() {
           <nav className="no-print mb-6 flex gap-2" aria-label="Cashier views">
             <button type="button" onClick={() => setDashboardTab('orders')} className={`rounded-lg px-4 py-2 font-semibold ${dashboardTab === 'orders' ? 'bg-amber-400 text-slate-950' : 'border border-slate-700 text-slate-300'}`}>Live Orders</button>
             <button type="button" onClick={() => setDashboardTab('items')} className={`rounded-lg px-4 py-2 font-semibold ${dashboardTab === 'items' ? 'bg-amber-400 text-slate-950' : 'border border-slate-700 text-slate-300'}`}>Items</button>
+            <button type="button" onClick={() => setDashboardTab('customization')} className={`rounded-lg px-4 py-2 font-semibold ${dashboardTab === 'customization' ? 'bg-amber-400 text-slate-950' : 'border border-slate-700 text-slate-300'}`}>Customization</button>
           </nav>
 
-          {dashboardTab === 'items' ? <CashierItems restaurantId={restaurantId} /> : <>
+          {dashboardTab === 'items' ? <CashierItems restaurantId={restaurantId} /> : dashboardTab === 'customization' ? <CashierCustomization restaurant={restaurantProfile} onSaved={setRestaurantProfile} /> : <>
 
 
           <section className="no-print mb-7 rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">

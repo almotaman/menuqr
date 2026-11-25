@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Download, Share2 } from 'lucide-react'
 import { client, databases, getAppwriteConfig } from '@/lib/appwrite-client'
 import { isWithinLast24Hours } from '@/lib/order-guards'
+import RestaurantLogoHeader from '@/components/restaurant-logo-header'
+import { resolveRestaurantTheme, type LogoStyle } from '@/lib/restaurant-theme'
 
 type ReceiptItem = {
   name: string
@@ -27,6 +29,12 @@ type StoredOrder = {
   status?: string
   pagedAt?: string | null
   pageMeRequested?: boolean
+  brand?: {
+    restaurantName?: string
+    restaurantSlug?: string
+    logoUrl?: string | null
+    theme?: { primaryColor: string; secondaryColor: string; backgroundColor: string; logoStyle: LogoStyle }
+  }
 }
 
 function normalizeStatus(status?: string | null) {
@@ -350,11 +358,13 @@ export default function OrderConfirmationPage() {
   const currentStage = normalizeStatus(order?.status)
   const isWithinPagerWindow = Boolean(order?.createdAt && isWithinLast24Hours(order.createdAt))
   const total = Number(order?.totalAmount ?? items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0))
+  const receiptTheme = order?.brand?.theme || resolveRestaurantTheme({}, order?.brand?.restaurantSlug || 'restaurant', 'receipt')
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-slate-950 px-4 py-5 text-slate-900 sm:px-6">
+    <main className="flex min-h-[100dvh] items-center justify-center px-4 py-5 sm:px-6" style={{ backgroundColor: receiptTheme.backgroundColor, color: receiptTheme.primaryColor }}>
       <div className="flex max-h-[calc(100dvh-2.5rem)] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <header className="shrink-0 bg-emerald-600 px-6 py-7 text-center text-white">
+        <header className="shrink-0 px-6 py-5 text-center" style={{ backgroundColor: receiptTheme.primaryColor, color: receiptTheme.secondaryColor }}>
+          <RestaurantLogoHeader name={order?.brand?.restaurantName || 'Restaurant'} logoUrl={order?.brand?.logoUrl} logoStyle={receiptTheme.logoStyle} primaryColor={receiptTheme.secondaryColor} secondaryColor={receiptTheme.primaryColor} compact />
           <CheckCircle2 className="mx-auto mb-2 h-12 w-12" />
           <h1 className="text-2xl font-bold">Order Confirmed</h1>
           <p className="mt-1 text-sm text-emerald-50">Your order has been received by the restaurant.</p>
