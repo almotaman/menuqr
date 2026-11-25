@@ -21,6 +21,7 @@ type OrderItem = {
 type OrderDocument = {
   $id: string
   $createdAt?: string
+  created_at?: string
   order_number?: string | number | null
   orderNumber?: string | number | null
   restaurant_id?: string | null
@@ -35,6 +36,38 @@ type OrderDocument = {
   pageMeRequested?: boolean
   pagedAt?: string | null
   dining_mode?: 'alone' | 'group' | string | null
+}
+
+function orderCreatedAt(order: OrderDocument) {
+  return order.created_at || order.$createdAt || ''
+}
+
+function compareQueueOrder(first: OrderDocument, second: OrderDocument) {
+  const byArrival = orderCreatedAt(first).localeCompare(orderCreatedAt(second))
+  if (byArrival) return byArrival
+  const firstNumber = Number(first.order_number ?? first.orderNumber)
+  const secondNumber = Number(second.order_number ?? second.orderNumber)
+  const safeFirst = Number.isFinite(firstNumber) ? firstNumber : Number.MAX_SAFE_INTEGER
+  const safeSecond = Number.isFinite(secondNumber) ? secondNumber : Number.MAX_SAFE_INTEGER
+  return safeFirst - safeSecond || first.$id.localeCompare(second.$id)
+}
+
+function sortQueueOrders(orders: OrderDocument[], cutoffISO?: string) {
+  const cutoff = cutoffISO ? new Date(cutoffISO).getTime() : NaN
+  return orders
+    .filter(order => {
+      if (!Number.isFinite(cutoff)) return true
+      const createdAt = new Date(orderCreatedAt(order)).getTime()
+      return Number.isFinite(createdAt) && createdAt >= cutoff
+    })
+    .sort(compareQueueOrder)
+}
+
+function getQueueCutoff(restaurant: Record<string, unknown> | null | undefined, now: number) {
+  const lastReset = typeof restaurant?.lastOrderResetAt === 'string' ? restaurant.lastOrderResetAt : ''
+  if (lastReset && Number.isFinite(new Date(lastReset).getTime())) return lastReset
+  const intervalHours = Number(restaurant?.orderResetIntervalHours || 0)
+  return intervalHours > 0 ? new Date(now - intervalHours * 3600000).toISOString() : undefined
 }
 
 type RestaurantProfile = Record<string, unknown> & {
@@ -109,6 +142,7 @@ export default function CashierPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [restaurantId, setRestaurantId] = useState<string | null>(null)
   const [restaurantProfile, setRestaurantProfile] = useState<RestaurantProfile | null>(null)
+  const queueCutoffRef = useRef<string | undefined>(undefined)
   const [workspaceStatus, setWorkspaceStatus] = useState<'checking' | 'valid' | 'invalid'>('checking')
   const [orders, setOrders] = useState<OrderDocument[]>([])
   const [datePreset, setDatePreset] = useState<'today' | 'yesterday' | 'week' | 'custom'>('today')
@@ -135,10 +169,10 @@ export default function CashierPage() {
         order.$id,
         { status: 'sent_to_kitchen' }
       ) as unknown as OrderDocument
-      setOrders(current => [
-        promotedOrder,
+      setOrders(current => sortQueueOrders([
         ...current.filter(existing => existing.$id !== promotedOrder.$id),
-      ])
+        promotedOrder,
+      ], queueCutoffRef.current))
       setPrintOrder(promotedOrder)
       playSound()
     } catch (promotionError) {
@@ -175,9 +209,14 @@ export default function CashierPage() {
     return () => window.clearInterval(timer)
   }, [])
 
+  const queueCutoffISO = useMemo(() => {
+    return getQueueCutoff(restaurantProfile, now)
+  }, [restaurantProfile, now])
+
+  const orderedQueue = useMemo(() => sortQueueOrders(orders, queueCutoffISO), [orders, queueCutoffISO])
   const activeOrders = useMemo(
-    () => orders.filter(order => isActiveOrderStatus(order.status)),
-    [orders]
+    () => orderedQueue.filter(order => isActiveOrderStatus(order.status)),
+    [orderedQueue]
   )
 
   const filteredAnalyticsOrders = useMemo(() => {
@@ -294,6 +333,9 @@ export default function CashierPage() {
           return
         }
 
+        const currentQueueCutoffISO = getQueueCutoff(restaurant, Date.now())
+        queueCutoffRef.current = currentQueueCutoffISO
+
         if (!cancelled) {
           setRestaurantId(currentRestaurantId)
           setRestaurantProfile(restaurant || null)
@@ -308,7 +350,7 @@ export default function CashierPage() {
             ordersCollectionId,
             [
               Query.equal('restaurant_id', currentRestaurantId),
-              Query.orderDesc('$createdAt'),
+              Query.orderAsc('$createdAt'),
               Query.limit(100),
               ...(cursor ? [Query.cursorAfter(cursor)] : []),
             ]
@@ -319,7 +361,10 @@ export default function CashierPage() {
           cursor = page[page.length - 1]?.$id
           if (!cursor) break
         }
-        if (!cancelled) setOrders(allOrders.filter(order => order.restaurant_id === currentRestaurantId))
+        if (!cancelled) setOrders(sortQueueOrders(
+          allOrders.filter(order => order.restaurant_id === currentRestaurantId),
+          currentQueueCutoffISO,
+        ))
 
 
 
@@ -357,10 +402,10 @@ export default function CashierPage() {
 
             if (cancelled) return
 
-            setOrders(current => [
-              completeOrder,
+            setOrders(current => sortQueueOrders([
               ...current.filter(existing => existing.$id !== completeOrder.$id),
-            ])
+              completeOrder,
+            ], queueCutoffRef.current))
             if (isCreated && isActiveOrderStatus(completeOrder.status) && completeOrder.status !== 'pending_buffer') {
               setPrintOrder(completeOrder)
               playSound()
